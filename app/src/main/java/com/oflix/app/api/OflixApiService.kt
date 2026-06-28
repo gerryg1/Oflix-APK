@@ -21,4 +21,22 @@ interface OflixApiService {
     suspend fun getDetail(
         @Query("detailPath") detailPath: String
     ): Response<JsonObject>
+
+    @GET("subject/play")
+    suspend fun getPlay(
+        @Query("id") id: String,
+        @Query("subjectId") subjectId: String,
+        @Query("se") se: String = "0",
+        @Query("ep") ep: String = "0",
+        @Query("format") format: String = "MP4"
+    ): Response<JsonObject>
+
+    @GET("subject/download")
+    suspend fun getDownload(
+        @Query("id") id: String,
+        @Query("subjectId") subjectId: String,
+        @Query("se") se: String = "0",
+        @Query("ep") ep: String = "0",
+        @Query("format") format: String = "MP4"
+    ): Response<JsonObject>
 }

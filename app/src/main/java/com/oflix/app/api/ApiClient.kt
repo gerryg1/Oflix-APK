@@ -8,26 +8,39 @@ import java.util.concurrent.TimeUnit
 
 object ApiClient {
     private var retrofit: Retrofit? = null
+    private var fallbackRetrofit: Retrofit? = null
+
+    private fun buildHttpClient(): OkHttpClient {
+        val logging = HttpLoggingInterceptor().apply {
+            level = HttpLoggingInterceptor.Level.BASIC
+        }
+        return OkHttpClient.Builder()
+            .addInterceptor(AuthInterceptor())
+            .addInterceptor(logging)
+            .connectTimeout(30, TimeUnit.SECONDS)
+            .readTimeout(30, TimeUnit.SECONDS)
+            .build()
+    }
 
     fun getClient(): OflixApiService {
         if (retrofit == null) {
-            val logging = HttpLoggingInterceptor().apply {
-                level = HttpLoggingInterceptor.Level.BASIC
-            }
-
-            val client = OkHttpClient.Builder()
-                .addInterceptor(AuthInterceptor())
-                .addInterceptor(logging)
-                .connectTimeout(30, TimeUnit.SECONDS)
-                .readTimeout(30, TimeUnit.SECONDS)
-                .build()
-
             retrofit = Retrofit.Builder()
                 .baseUrl(Secrets.getApiBaseUrl())
-                .client(client)
+                .client(buildHttpClient())
                 .addConverterFactory(GsonConverterFactory.create())
                 .build()
         }
         return retrofit!!.create(OflixApiService::class.java)
+    }
+
+    fun getFallbackClient(): OflixApiService {
+        if (fallbackRetrofit == null) {
+            fallbackRetrofit = Retrofit.Builder()
+                .baseUrl("https://netnaija.film/wefeed-h5api-bff/")
+                .client(buildHttpClient())
+                .addConverterFactory(GsonConverterFactory.create())
+                .build()
+        }
+        return fallbackRetrofit!!.create(OflixApiService::class.java)
     }
 }

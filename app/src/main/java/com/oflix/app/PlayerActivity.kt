@@ -12,13 +12,18 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.annotation.OptIn
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.*
+import androidx.compose.material3.Text
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.MediaItem
 import androidx.media3.common.util.UnstableApi
@@ -34,9 +39,12 @@ class PlayerActivity : ComponentActivity() {
 
     companion object {
         private const val EXTRA_VIDEO_URL = "video_url"
-        fun createIntent(context: Context, videoUrl: String): Intent {
+        private const val EXTRA_VIDEO_TITLE = "video_title"
+
+        fun createIntent(context: Context, videoUrl: String, title: String = ""): Intent {
             return Intent(context, PlayerActivity::class.java).apply {
                 putExtra(EXTRA_VIDEO_URL, videoUrl)
+                putExtra(EXTRA_VIDEO_TITLE, title)
             }
         }
     }
@@ -44,14 +52,15 @@ class PlayerActivity : ComponentActivity() {
     @OptIn(UnstableApi::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        
-        // Fullscreen and hide system bars
+
+        // Fullscreen immersive
         window.setFlags(
             WindowManager.LayoutParams.FLAG_FULLSCREEN,
             WindowManager.LayoutParams.FLAG_FULLSCREEN
         )
 
         val videoUrl = intent.getStringExtra(EXTRA_VIDEO_URL) ?: ""
+        val videoTitle = intent.getStringExtra(EXTRA_VIDEO_TITLE) ?: ""
 
         setContent {
             val context = LocalContext.current
@@ -61,7 +70,7 @@ class PlayerActivity : ComponentActivity() {
                     prepare()
                     playWhenReady = true
                     exoPlayer = this
-                    
+
                     addAnalyticsListener(object : androidx.media3.exoplayer.analytics.AnalyticsListener {
                         override fun onAudioSessionIdChanged(
                             eventTime: androidx.media3.exoplayer.analytics.AnalyticsListener.EventTime,
@@ -91,6 +100,23 @@ class PlayerActivity : ComponentActivity() {
                     },
                     modifier = Modifier.fillMaxSize()
                 )
+
+                // Title overlay at top
+                if (videoTitle.isNotEmpty()) {
+                    Text(
+                        text = videoTitle,
+                        color = Color.White,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier
+                            .align(Alignment.TopStart)
+                            .padding(start = 56.dp, top = 16.dp, end = 16.dp)
+                            .background(Color(0x66000000))
+                            .padding(horizontal = 12.dp, vertical = 6.dp)
+                    )
+                }
             }
         }
     }
@@ -98,16 +124,14 @@ class PlayerActivity : ComponentActivity() {
     private fun applyAudioProcessing(sessionId: Int) {
         if (sessionId == 0) return
         try {
-            // 1. Equalizer for HighPass (90Hz), LowShelf (80Hz), Peaking (3kHz), HighShelf (8kHz)
+            // 1. Equalizer for bass warmth and voice clarity
             equalizer = Equalizer(0, sessionId).apply {
                 enabled = true
-                // Android EQ bands are typically: 60Hz, 230Hz, 910Hz, 3600Hz, 14000Hz.
-                // We'll boost the 60Hz (warmth) and 3600Hz (voice clarity).
                 val bands = numberOfBands
                 if (bands >= 5) {
-                    setBandLevel(0, 200)   // +2dB at ~60Hz
-                    setBandLevel(3, 300)   // +3dB at ~3.6kHz
-                    setBandLevel(4, 150)   // +1.5dB at ~14kHz
+                    setBandLevel(0, 200)   // +2dB at ~60Hz (bass warmth)
+                    setBandLevel(3, 300)   // +3dB at ~3.6kHz (voice clarity)
+                    setBandLevel(4, 150)   // +1.5dB at ~14kHz (air/sparkle)
                 }
             }
 
@@ -115,14 +139,7 @@ class PlayerActivity : ComponentActivity() {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
                 val builder = DynamicsProcessing.Config.Builder(
                     DynamicsProcessing.VARIANT_FAVOR_FREQUENCY_RESOLUTION,
-                    2, // channels
-                    true, // enable mbc
-                    0, // mbc bands
-                    true, // enable preEQ
-                    0, // preEq bands
-                    true, // enable postEq
-                    0, // postEq bands
-                    true // enable limiter
+                    2, true, 0, true, 0, true, 0, true
                 )
                 val config = builder.build()
                 dynamicsProcessing = DynamicsProcessing(0, sessionId, config).apply {
@@ -130,9 +147,9 @@ class PlayerActivity : ComponentActivity() {
                 }
             }
 
-            // 3. LoudnessEnhancer (Makeup gain +1.4)
+            // 3. LoudnessEnhancer (Makeup gain +1.4dB)
             loudnessEnhancer = LoudnessEnhancer(sessionId).apply {
-                setTargetGain(1400) // +1.4 dB (1400 mB)
+                setTargetGain(1400)
                 enabled = true
             }
         } catch (e: Exception) {

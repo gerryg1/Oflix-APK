@@ -23,7 +23,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.oflix.app.data.MediaItem
-import com.oflix.app.data.MockData
+
 import com.oflix.app.ui.components.CategoryTabs
 import com.oflix.app.ui.components.HorizontalSection
 import com.oflix.app.ui.theme.PrimaryRed
@@ -124,15 +124,9 @@ fun HomeScreen(
                             Spacer(modifier = Modifier.height(24.dp))
 
                             HorizontalSection(
-                                title = "Trending Now",
+                                title = "Trending Now 🔥",
                                 items = state.trending,
                                 onItemClick = { onNavigateToDetail(it.id) }
-                            )
-                            HorizontalSection(
-                                title = "Film Terbaru",
-                                items = state.trending,
-                                onItemClick = { onNavigateToDetail(it.id) },
-                                onSeeMoreClick = { handleCategoryClick("film") }
                             )
                             HorizontalSection(
                                 title = "Indonesian Movies",
@@ -176,12 +170,8 @@ fun HomeScreen(
                                 items = state.thailandDrama,
                                 onItemClick = { onNavigateToDetail(it.id) }
                             )
-                            HorizontalSection(
-                                title = "📚 Komik Populer",
-                                items = MockData.komik,
-                                onItemClick = { handleCategoryClick("komik") },
-                                onSeeMoreClick = { handleCategoryClick("komik") }
-                            )
+                            // Komik section - Coming Soon
+                            // HorizontalSection for Komik is intentionally omitted as it's still in development
                         }
                     }
                     is HomeUiState.Error -> {
@@ -193,10 +183,13 @@ fun HomeScreen(
             }
         }
         
-        // Top Progress Bar
+        // Top Progress Bar — rendered after Column so it's on top
         if (uiState is HomeUiState.Loading) {
             LinearProgressIndicator(
-                modifier = Modifier.fillMaxWidth().align(Alignment.TopCenter),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(3.dp)
+                    .align(Alignment.TopCenter),
                 color = PrimaryRed,
                 trackColor = Color.Transparent
             )
