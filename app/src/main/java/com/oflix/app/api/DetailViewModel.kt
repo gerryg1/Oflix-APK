@@ -96,7 +96,7 @@ class DetailViewModel : ViewModel() {
     /**
      * Load stream for playback. Mirrors Detail.jsx loadStream() logic.
      */
-    fun loadStream(subjectId: String, seasonIdx: Int, episodeIdx: Int, title: String) {
+    fun loadStream(subjectId: String, seasonIdx: Int, episodeIdx: Int, title: String, detailPath: String) {
         _streamState.value = StreamUiState.Loading
         viewModelScope.launch {
             try {
@@ -106,7 +106,7 @@ class DetailViewModel : ViewModel() {
                 // Retry up to 3 times (matching JS fetchStream retry logic)
                 var lastResult: StreamRepository.StreamResult? = null
                 for (attempt in 1..3) {
-                    val result = StreamRepository.fetchStream(subjectId, se, ep)
+                    val result = StreamRepository.fetchStream(subjectId, se, ep, detailPath)
                     lastResult = result
                     if (result.success && result.videoUrl.isNotEmpty()) {
                         _streamState.value = StreamUiState.Ready(result.videoUrl, title)

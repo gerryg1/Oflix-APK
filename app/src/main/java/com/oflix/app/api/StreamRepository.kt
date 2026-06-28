@@ -23,14 +23,22 @@ object StreamRepository {
 
     /**
      * Fetch stream for a given subjectId + season/episode.
-     * Tries primary API first, then fallback to netnaija.film.
+     * Tries netnaija.film first (as requested), then fallback to aoneroom.
      */
-    suspend fun fetchStream(subjectId: String, se: String, ep: String): StreamResult {
-        // Try primary (aoneroom)
+    suspend fun fetchStream(subjectId: String, se: String, ep: String, detailPath: String): StreamResult {
+        val aoneroomReferer = if (detailPath.isNotEmpty())
+            "https://themoviebox.org/movies/$detailPath?id=$subjectId&type=/movie/detail&detailSe=&detailEp=&lang=en"
+        else "https://themoviebox.org/"
+        
+        val netnaijaReferer = if (detailPath.isNotEmpty())
+            "https://netnaija.film/spa/videoPlayPage/movies/$detailPath?id=$subjectId&type=/movie/detail&detailSe=&detailEp=&lang=en"
+        else "https://netnaija.film/"
+
+        // Try primary (netnaija.film - currently more reliable for play)
         try {
-            val api = ApiClient.getClient()
-            val playRes = api.getPlay(id = subjectId, subjectId = subjectId, se = se, ep = ep)
-            val dlRes = api.getDownload(id = subjectId, subjectId = subjectId, se = se, ep = ep)
+            val netnaijaApi = ApiClient.getFallbackClient()
+            val playRes = netnaijaApi.getPlay(referer = netnaijaReferer, id = subjectId, subjectId = subjectId, se = se, ep = ep)
+            val dlRes = netnaijaApi.getDownload(referer = netnaijaReferer, id = subjectId, subjectId = subjectId, se = se, ep = ep)
 
             val playData = if (playRes.isSuccessful && playRes.body()?.get("code")?.asInt == 0)
                 playRes.body()?.getAsJsonObject("data") else null
@@ -43,11 +51,11 @@ object StreamRepository {
             e.printStackTrace()
         }
 
-        // Try fallback (netnaija.film)
+        // Try fallback (aoneroom)
         try {
-            val fallbackApi = ApiClient.getFallbackClient()
-            val playRes = fallbackApi.getPlay(id = subjectId, subjectId = subjectId, se = se, ep = ep)
-            val dlRes = fallbackApi.getDownload(id = subjectId, subjectId = subjectId, se = se, ep = ep)
+            val aoneroomApi = ApiClient.getClient()
+            val playRes = aoneroomApi.getPlay(referer = aoneroomReferer, id = subjectId, subjectId = subjectId, se = se, ep = ep)
+            val dlRes = aoneroomApi.getDownload(referer = aoneroomReferer, id = subjectId, subjectId = subjectId, se = se, ep = ep)
 
             val playData = if (playRes.isSuccessful && playRes.body()?.get("code")?.asInt == 0)
                 playRes.body()?.getAsJsonObject("data") else null

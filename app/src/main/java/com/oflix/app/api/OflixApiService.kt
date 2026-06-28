@@ -2,6 +2,7 @@ package com.oflix.app.api
 
 import retrofit2.http.GET
 import retrofit2.http.Query
+import retrofit2.http.Header
 import retrofit2.Response
 import com.google.gson.JsonObject
 
@@ -24,6 +25,7 @@ interface OflixApiService {
 
     @GET("subject/play")
     suspend fun getPlay(
+        @Header("Referer") referer: String,
         @Query("id") id: String,
         @Query("subjectId") subjectId: String,
         @Query("se") se: String = "0",
@@ -33,6 +35,7 @@ interface OflixApiService {
 
     @GET("subject/download")
     suspend fun getDownload(
+        @Header("Referer") referer: String,
         @Query("id") id: String,
         @Query("subjectId") subjectId: String,
         @Query("se") se: String = "0",

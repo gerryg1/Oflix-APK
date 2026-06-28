@@ -184,13 +184,13 @@ fun DetailScreen(
                         Button(
                             onClick = {
                                 if (detail.isMovie) {
-                                    viewModel.loadStream(detail.subjectId, -1, -1, detail.title)
+                                    viewModel.loadStream(detail.subjectId, -1, -1, detail.title, detail.detailPath)
                                 } else {
                                     val season = detail.seasons.getOrNull(currentSeason)
                                     val ep = season?.episodes?.firstOrNull()
                                     if (ep != null) {
                                         val episodeTitle = "${detail.title} · S${season.season} E${ep.episode}"
-                                        viewModel.loadStream(detail.subjectId, currentSeason, 0, episodeTitle)
+                                        viewModel.loadStream(detail.subjectId, currentSeason, 0, episodeTitle, detail.detailPath)
                                     }
                                 }
                             },
@@ -312,7 +312,8 @@ fun DetailScreen(
                                                         detail.subjectId,
                                                         currentSeason,
                                                         epIdx,
-                                                        episodeTitle
+                                                        episodeTitle,
+                                                        detail.detailPath
                                                     )
                                                 }
                                             )
