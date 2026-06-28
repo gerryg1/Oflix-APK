@@ -15,6 +15,7 @@ import androidx.compose.ui.unit.sp
 import com.oflix.app.data.MediaItem
 import com.oflix.app.ui.theme.TextMuted
 import com.oflix.app.ui.components.shimmerEffect
+import androidx.compose.ui.draw.clip
 
 @Composable
 fun HorizontalSection(

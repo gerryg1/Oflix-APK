@@ -22,6 +22,7 @@ import coil.compose.AsyncImage
 import com.oflix.app.data.MockData
 import com.oflix.app.ui.theme.PrimaryRed
 import com.oflix.app.ui.theme.TextMuted
+import androidx.compose.ui.draw.clip
 
 import androidx.compose.animation.Crossfade
 import androidx.compose.ui.platform.LocalContext

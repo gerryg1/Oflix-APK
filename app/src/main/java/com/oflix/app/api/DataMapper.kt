@@ -39,7 +39,7 @@ object DataMapper {
                                 id = id,
                                 title = title,
                                 posterUrl = optimizePoster(coverUrl),
-                                type = typeStr,
+                                category = typeStr,
                                 year = year,
                                 rating = rating
                             )
