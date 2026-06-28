@@ -28,6 +28,9 @@ import com.oflix.app.ui.components.CategoryTabs
 import com.oflix.app.ui.components.HorizontalSection
 import com.oflix.app.ui.theme.PrimaryRed
 
+import android.widget.Toast
+import androidx.compose.ui.platform.LocalContext
+
 @Composable
 fun HomeScreen(
     currentCategory: String,
@@ -35,6 +38,15 @@ fun HomeScreen(
     onNavigateToDetail: (String) -> Unit
 ) {
     val scrollState = rememberScrollState()
+    val context = LocalContext.current
+
+    val handleCategoryClick: (String) -> Unit = { category ->
+        if (category == "donghua" || category == "komik") {
+            Toast.makeText(context, "Kategori ini Segera Hadir!", Toast.LENGTH_SHORT).show()
+        } else {
+            onCategorySelected(category)
+        }
+    }
 
     Column(
         modifier = Modifier
@@ -61,7 +73,7 @@ fun HomeScreen(
         // Category Tabs
         CategoryTabs(
             currentCategory = currentCategory,
-            onCategorySelected = onCategorySelected
+            onCategorySelected = handleCategoryClick
         )
 
         // Hero Banner (using the first trending item)
@@ -72,7 +84,7 @@ fun HomeScreen(
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        // Horizontal Sections
+        // Horizontal Sections based on route.js
         HorizontalSection(
             title = "Trending Now",
             items = MockData.trending,
@@ -80,24 +92,67 @@ fun HomeScreen(
         )
 
         HorizontalSection(
-            title = "Film Indonesia",
-            items = MockData.indonesianMovies,
+            title = "Film Terbaru",
+            items = MockData.trending, // using trending as fallback for film
             onItemClick = { onNavigateToDetail(it.id) },
-            onSeeMoreClick = { onCategorySelected("film") }
+            onSeeMoreClick = { handleCategoryClick("film") }
         )
 
         HorizontalSection(
-            title = "Animasi Pilihan",
-            items = MockData.anime,
-            onItemClick = { onNavigateToDetail(it.id) },
-            onSeeMoreClick = { onCategorySelected("donghua") }
+            title = "Indonesian Movies",
+            items = MockData.indonesianMovies,
+            onItemClick = { onNavigateToDetail(it.id) }
         )
 
+        HorizontalSection(
+            title = "Indonesian Drama",
+            items = MockData.indonesianDrama,
+            onItemClick = { onNavigateToDetail(it.id) }
+        )
+
+        HorizontalSection(
+            title = "K-Drama Populer",
+            items = MockData.kdrama,
+            onItemClick = { onNavigateToDetail(it.id) }
+        )
+
+        HorizontalSection(
+            title = "Anime (Donghua)",
+            items = MockData.anime,
+            onItemClick = { onNavigateToDetail(it.id) },
+            onSeeMoreClick = { handleCategoryClick("donghua") }
+        )
+
+        HorizontalSection(
+            title = "Western TV",
+            items = MockData.westernTv,
+            onItemClick = { onNavigateToDetail(it.id) },
+            onSeeMoreClick = { handleCategoryClick("series") }
+        )
+
+        HorizontalSection(
+            title = "Short TV",
+            items = MockData.shortTv,
+            onItemClick = { onNavigateToDetail(it.id) }
+        )
+
+        HorizontalSection(
+            title = "Horror Pilihan",
+            items = MockData.horror,
+            onItemClick = { onNavigateToDetail(it.id) }
+        )
+
+        HorizontalSection(
+            title = "Thailand Drama",
+            items = MockData.thailandDrama,
+            onItemClick = { onNavigateToDetail(it.id) }
+        )
+        
         HorizontalSection(
             title = "📚 Komik Populer",
             items = MockData.komik,
-            onItemClick = { onNavigateToDetail(it.id) },
-            onSeeMoreClick = { onCategorySelected("komik") }
+            onItemClick = { handleCategoryClick("komik") },
+            onSeeMoreClick = { handleCategoryClick("komik") }
         )
     }
 }

@@ -47,6 +47,14 @@ android {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
     }
+    
+    // Enable C++ NDK Build
+    externalNativeBuild {
+        cmake {
+            path = file("src/main/cpp/CMakeLists.txt")
+            version = "3.22.1"
+        }
+    }
 }
 
 dependencies {
@@ -67,6 +75,12 @@ dependencies {
     implementation("io.coil-kt:coil-compose:2.6.0")
     // Material Icons Extended
     implementation("androidx.compose.material:material-icons-extended")
+    
+    // Retrofit & OkHttp (for API)
+    implementation("com.squareup.retrofit2:retrofit:2.9.0")
+    implementation("com.squareup.retrofit2:converter-gson:2.9.0")
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    implementation("com.squareup.okhttp3:logging-interceptor:4.12.0")
 }
 
 // Custom Gradle task to automatically copy the logo from the preloader directory

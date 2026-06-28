@@ -36,4 +36,24 @@ object MockData {
         MediaItem("11", "Solo Leveling", "https://upload.wikimedia.org/wikipedia/en/thumb/8/87/Solo_Leveling_Webtoon_cover.png/220px-Solo_Leveling_Webtoon_cover.png", "Komik", isTop = true),
         MediaItem("12", "One Piece", "https://upload.wikimedia.org/wikipedia/en/9/90/One_Piece%2C_Volume_61_Cover_%28Japanese%29.jpg", "Komik", isTop = true)
     )
+
+    // Dummy lists for remaining categories
+    val indonesianDrama = listOf(
+        MediaItem("13", "Gadis Kretek", "https://image.tmdb.org/t/p/w500/1Xy16iN6m6wEaB5J2ZpI4cZ8WvJ.jpg", "Series", "2023", "8.2", "1 Season")
+    )
+    val kdrama = listOf(
+        MediaItem("14", "Crash Landing on You", "https://image.tmdb.org/t/p/w500/kZ1N1N5U2wX3E4bZ9fL7rV5r8yU.jpg", "Series", "2019", "8.7", "1 Season")
+    )
+    val westernTv = listOf(
+        MediaItem("15", "Breaking Bad", "https://image.tmdb.org/t/p/w500/ggFHVNu6YYI5L9pCfOacjizRGt.jpg", "Series", "2008", "9.5", "5 Seasons")
+    )
+    val shortTv = listOf(
+        MediaItem("16", "Love, Death & Robots", "https://image.tmdb.org/t/p/w500/cRiQCwZ7G7C3T50K8gD9PzVwH5.jpg", "Series", "2019", "8.4", "3 Seasons")
+    )
+    val horror = listOf(
+        MediaItem("17", "The Conjuring", "https://image.tmdb.org/t/p/w500/wVYREutTvI2tmxr6ujrHT704wGF.jpg", "Film", "2013", "7.5", "112m")
+    )
+    val thailandDrama = listOf(
+        MediaItem("18", "Girl From Nowhere", "https://image.tmdb.org/t/p/w500/8w0w5f1Z1mH7xQhB9x1Z9Z1Z1Z.jpg", "Series", "2018", "7.9", "2 Seasons")
+    )
 }
