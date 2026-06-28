@@ -31,14 +31,28 @@ import com.oflix.app.ui.theme.PrimaryRed
 import android.widget.Toast
 import androidx.compose.ui.platform.LocalContext
 
+import androidx.compose.animation.Crossfade
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.oflix.app.api.HomeUiState
+import com.oflix.app.api.HomeViewModel
+import com.oflix.app.ui.components.shimmerEffect
+
 @Composable
 fun HomeScreen(
     currentCategory: String,
     onCategorySelected: (String) -> Unit,
-    onNavigateToDetail: (String) -> Unit
+    onNavigateToDetail: (String) -> Unit,
+    viewModel: HomeViewModel = viewModel()
 ) {
     val scrollState = rememberScrollState()
     val context = LocalContext.current
+    val uiState by viewModel.uiState.collectAsState()
 
     val handleCategoryClick: (String) -> Unit = { category ->
         if (category == "donghua" || category == "komik") {
@@ -48,112 +62,145 @@ fun HomeScreen(
         }
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(scrollState)
-            .padding(bottom = 80.dp) // Padding for bottom nav
-    ) {
-        // App Header
-        Row(
+    Box(modifier = Modifier.fillMaxSize()) {
+        Column(
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 14.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically
+                .fillMaxSize()
+                .verticalScroll(scrollState)
+                .padding(bottom = 80.dp) // Padding for bottom nav
         ) {
-            Text(
-                text = "OFLIX",
+            // App Header
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 14.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "OFLIX",
+                    color = PrimaryRed,
+                    fontSize = 24.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    letterSpacing = 1.sp
+                )
+            }
+
+            // Category Tabs
+            CategoryTabs(
+                currentCategory = currentCategory,
+                onCategorySelected = handleCategoryClick
+            )
+
+            Crossfade(targetState = uiState, label = "home_content") { state ->
+                when (state) {
+                    is HomeUiState.Loading -> {
+                        // Skeleton Layout
+                        Column {
+                            Box(modifier = Modifier
+                                .fillMaxWidth()
+                                .aspectRatio(3f / 4f)
+                                .shimmerEffect()
+                            )
+                            Spacer(modifier = Modifier.height(24.dp))
+                            
+                            val dummyItems = List(5) { MediaItem(it.toString(), "", "", "") }
+                            repeat(4) {
+                                HorizontalSection(
+                                    title = "Memuat...",
+                                    items = dummyItems,
+                                    onItemClick = {},
+                                    isLoading = true
+                                )
+                            }
+                        }
+                    }
+                    is HomeUiState.Success -> {
+                        Column {
+                            val heroItem = state.trending.firstOrNull()
+                            if (heroItem != null) {
+                                HeroBanner(hero = heroItem, onClick = { onNavigateToDetail(heroItem.id) })
+                            }
+
+                            Spacer(modifier = Modifier.height(24.dp))
+
+                            HorizontalSection(
+                                title = "Trending Now",
+                                items = state.trending,
+                                onItemClick = { onNavigateToDetail(it.id) }
+                            )
+                            HorizontalSection(
+                                title = "Film Terbaru",
+                                items = state.trending,
+                                onItemClick = { onNavigateToDetail(it.id) },
+                                onSeeMoreClick = { handleCategoryClick("film") }
+                            )
+                            HorizontalSection(
+                                title = "Indonesian Movies",
+                                items = state.indonesianMovies,
+                                onItemClick = { onNavigateToDetail(it.id) }
+                            )
+                            HorizontalSection(
+                                title = "Indonesian Drama",
+                                items = state.indonesianDrama,
+                                onItemClick = { onNavigateToDetail(it.id) }
+                            )
+                            HorizontalSection(
+                                title = "K-Drama Populer",
+                                items = state.kdrama,
+                                onItemClick = { onNavigateToDetail(it.id) }
+                            )
+                            HorizontalSection(
+                                title = "Anime (Donghua)",
+                                items = state.anime,
+                                onItemClick = { onNavigateToDetail(it.id) },
+                                onSeeMoreClick = { handleCategoryClick("donghua") }
+                            )
+                            HorizontalSection(
+                                title = "Western TV",
+                                items = state.westernTv,
+                                onItemClick = { onNavigateToDetail(it.id) },
+                                onSeeMoreClick = { handleCategoryClick("series") }
+                            )
+                            HorizontalSection(
+                                title = "Short TV",
+                                items = state.shortTv,
+                                onItemClick = { onNavigateToDetail(it.id) }
+                            )
+                            HorizontalSection(
+                                title = "Horror Pilihan",
+                                items = state.horror,
+                                onItemClick = { onNavigateToDetail(it.id) }
+                            )
+                            HorizontalSection(
+                                title = "Thailand Drama",
+                                items = state.thailandDrama,
+                                onItemClick = { onNavigateToDetail(it.id) }
+                            )
+                            HorizontalSection(
+                                title = "📚 Komik Populer",
+                                items = MockData.komik,
+                                onItemClick = { handleCategoryClick("komik") },
+                                onSeeMoreClick = { handleCategoryClick("komik") }
+                            )
+                        }
+                    }
+                    is HomeUiState.Error -> {
+                        Box(modifier = Modifier.fillMaxWidth().height(200.dp), contentAlignment = Alignment.Center) {
+                            Text(text = "Gagal memuat: ${state.message}", color = Color.Red)
+                        }
+                    }
+                }
+            }
+        }
+        
+        // Top Progress Bar
+        if (uiState is HomeUiState.Loading) {
+            LinearProgressIndicator(
+                modifier = Modifier.fillMaxWidth().align(Alignment.TopCenter),
                 color = PrimaryRed,
-                fontSize = 24.sp,
-                fontWeight = FontWeight.ExtraBold,
-                letterSpacing = 1.sp
+                trackColor = Color.Transparent
             )
         }
-
-        // Category Tabs
-        CategoryTabs(
-            currentCategory = currentCategory,
-            onCategorySelected = handleCategoryClick
-        )
-
-        // Hero Banner (using the first trending item)
-        val heroItem = MockData.trending.firstOrNull()
-        if (heroItem != null) {
-            HeroBanner(hero = heroItem, onClick = { onNavigateToDetail(heroItem.id) })
-        }
-
-        Spacer(modifier = Modifier.height(24.dp))
-
-        // Horizontal Sections based on route.js
-        HorizontalSection(
-            title = "Trending Now",
-            items = MockData.trending,
-            onItemClick = { onNavigateToDetail(it.id) }
-        )
-
-        HorizontalSection(
-            title = "Film Terbaru",
-            items = MockData.trending, // using trending as fallback for film
-            onItemClick = { onNavigateToDetail(it.id) },
-            onSeeMoreClick = { handleCategoryClick("film") }
-        )
-
-        HorizontalSection(
-            title = "Indonesian Movies",
-            items = MockData.indonesianMovies,
-            onItemClick = { onNavigateToDetail(it.id) }
-        )
-
-        HorizontalSection(
-            title = "Indonesian Drama",
-            items = MockData.indonesianDrama,
-            onItemClick = { onNavigateToDetail(it.id) }
-        )
-
-        HorizontalSection(
-            title = "K-Drama Populer",
-            items = MockData.kdrama,
-            onItemClick = { onNavigateToDetail(it.id) }
-        )
-
-        HorizontalSection(
-            title = "Anime (Donghua)",
-            items = MockData.anime,
-            onItemClick = { onNavigateToDetail(it.id) },
-            onSeeMoreClick = { handleCategoryClick("donghua") }
-        )
-
-        HorizontalSection(
-            title = "Western TV",
-            items = MockData.westernTv,
-            onItemClick = { onNavigateToDetail(it.id) },
-            onSeeMoreClick = { handleCategoryClick("series") }
-        )
-
-        HorizontalSection(
-            title = "Short TV",
-            items = MockData.shortTv,
-            onItemClick = { onNavigateToDetail(it.id) }
-        )
-
-        HorizontalSection(
-            title = "Horror Pilihan",
-            items = MockData.horror,
-            onItemClick = { onNavigateToDetail(it.id) }
-        )
-
-        HorizontalSection(
-            title = "Thailand Drama",
-            items = MockData.thailandDrama,
-            onItemClick = { onNavigateToDetail(it.id) }
-        )
-        
-        HorizontalSection(
-            title = "📚 Komik Populer",
-            items = MockData.komik,
-            onItemClick = { handleCategoryClick("komik") },
-            onSeeMoreClick = { handleCategoryClick("komik") }
-        )
     }
 }
 

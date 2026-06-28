@@ -14,13 +14,15 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.oflix.app.data.MediaItem
 import com.oflix.app.ui.theme.TextMuted
+import com.oflix.app.ui.components.shimmerEffect
 
 @Composable
 fun HorizontalSection(
     title: String,
     items: List<MediaItem>,
     onItemClick: (MediaItem) -> Unit,
-    onSeeMoreClick: (() -> Unit)? = null
+    onSeeMoreClick: (() -> Unit)? = null,
+    isLoading: Boolean = false
 ) {
     Column(
         modifier = Modifier
@@ -61,8 +63,20 @@ fun HorizontalSection(
             contentPadding = PaddingValues(horizontal = 14.dp),
             horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            items(items) { item ->
-                MovieCard(movie = item, onClick = { onItemClick(item) })
+            if (isLoading) {
+                items(5) {
+                    Box(
+                        modifier = Modifier
+                            .width(110.dp)
+                            .aspectRatio(2f / 3f)
+                            .clip(androidx.compose.foundation.shape.RoundedCornerShape(10.dp))
+                            .shimmerEffect()
+                    )
+                }
+            } else {
+                items(items) { item ->
+                    MovieCard(movie = item, onClick = { onItemClick(item) })
+                }
             }
         }
     }

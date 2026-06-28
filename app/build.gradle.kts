@@ -81,6 +81,13 @@ dependencies {
     implementation("com.squareup.retrofit2:converter-gson:2.9.0")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("com.squareup.okhttp3:logging-interceptor:4.12.0")
+    
+    // Jetpack Media3 (ExoPlayer)
+    val media3_version = "1.2.1"
+    implementation("androidx.media3:media3-exoplayer:$media3_version")
+    implementation("androidx.media3:media3-exoplayer-hls:$media3_version")
+    implementation("androidx.media3:media3-ui:$media3_version")
+    implementation("androidx.media3:media3-session:$media3_version")
 }
 
 // Custom Gradle task to automatically copy the logo from the preloader directory
