@@ -12,9 +12,9 @@ object DataMapper {
         try {
             val dataObj = response.get("data").asJsonObject
             
-            // Try to extract from list array
-            if (dataObj.has("list") && dataObj.get("list").isJsonArray) {
-                val listArray = dataObj.get("list").asJsonArray
+            // Try to extract from subjectList array
+            if (dataObj.has("subjectList") && dataObj.get("subjectList").isJsonArray) {
+                val listArray = dataObj.get("subjectList").asJsonArray
                 for (i in 0 until listArray.size()) {
                     val itemObj = listArray.get(i).asJsonObject
                     
