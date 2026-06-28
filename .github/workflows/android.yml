@@ -6,9 +6,12 @@ on:
   pull_request:
     branches: [ "main", "master" ]
 
+permissions:
+  contents: write
+
 jobs:
   build:
-    name: Build Debug APK
+    name: Build and Release APK
     runs-on: ubuntu-latest
 
     steps:
@@ -28,9 +31,24 @@ jobs:
     - name: Build Debug APK
       run: ./gradlew assembleDebug
 
-    - name: Upload APK
-      uses: actions/upload-artifact@v4
+    - name: Rename APK for Release
+      run: mv app/build/outputs/apk/debug/app-debug.apk app/build/outputs/apk/debug/Oflix-Debug.apk
+
+    - name: Create or Update Release
+      uses: softprops/action-gh-release@v2
       with:
-        name: oflix-app-debug
-        path: app/build/outputs/apk/debug/app-debug.apk
-        retention-days: 7
+        tag_name: latest
+        name: Oflix App Latest Build
+        body: |
+          ### Oflix Android App Build
+          
+          Ini adalah build otomatis terbaru dari kode Anda.
+          * **Commit SHA:** `${{ github.sha }}`
+          * **Tanggal Build:** `${{ github.event.head_commit.timestamp || github.event.commits[0].timestamp }}`
+          
+          Unduh file APK langsung di bawah ini tanpa dibungkus ZIP.
+        draft: false
+        prerelease: false
+        files: app/build/outputs/apk/debug/Oflix-Debug.apk
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
