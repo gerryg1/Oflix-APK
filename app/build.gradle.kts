@@ -60,6 +60,13 @@ dependencies {
     implementation("androidx.compose.ui:ui-graphics")
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.compose.material3:material3")
+    
+    // Navigation Compose
+    implementation("androidx.navigation:navigation-compose:2.7.7")
+    // Coil for Image Loading
+    implementation("io.coil-kt:coil-compose:2.6.0")
+    // Material Icons Extended
+    implementation("androidx.compose.material:material-icons-extended")
 }
 
 // Custom Gradle task to automatically copy the logo from the preloader directory
