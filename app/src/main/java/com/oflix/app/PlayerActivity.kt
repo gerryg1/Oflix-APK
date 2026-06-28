@@ -62,8 +62,14 @@ class PlayerActivity : ComponentActivity() {
                     playWhenReady = true
                     exoPlayer = this
                     
-                    // Apply AudioFX matching JS Web Audio API
-                    applyAudioProcessing(this.audioSessionId)
+                    addAnalyticsListener(object : androidx.media3.exoplayer.analytics.AnalyticsListener {
+                        override fun onAudioSessionIdChanged(
+                            eventTime: androidx.media3.exoplayer.analytics.AnalyticsListener.EventTime,
+                            audioSessionId: Int
+                        ) {
+                            applyAudioProcessing(audioSessionId)
+                        }
+                    })
                 }
             }
 

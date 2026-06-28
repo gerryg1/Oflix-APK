@@ -87,14 +87,16 @@ fun DetailScreen(
                     }
                 }
                 is DetailUiState.Success -> {
-                    val data = state.data
-                    val subject = if (data.has("subject")) data.getAsJsonObject("subject") else null
-                    val metadata = if (data.has("metadata")) data.getAsJsonObject("metadata") else null
+                    val rootData = state.data
+                    val innerData = if (rootData.has("data") && !rootData.get("data").isJsonNull) rootData.getAsJsonObject("data") else null
+                    
+                    val subject = if (innerData?.has("subject") == true) innerData.getAsJsonObject("subject") else null
+                    val metadata = if (innerData?.has("metadata") == true) innerData.getAsJsonObject("metadata") else null
 
                     val title = subject?.get("title")?.asString ?: metadata?.get("title")?.asString ?: "Unknown"
                     val year = subject?.get("releaseDate")?.asString?.take(4) ?: ""
                     val rating = subject?.get("imdbRatingValue")?.asString ?: ""
-                    val desc = subject?.get("brief")?.asString ?: metadata?.get("description")?.asString ?: ""
+                    val desc = subject?.get("description")?.asString ?: subject?.get("brief")?.asString ?: metadata?.get("description")?.asString ?: ""
                     
                     var coverUrl = ""
                     if (subject?.has("cover") == true) {
