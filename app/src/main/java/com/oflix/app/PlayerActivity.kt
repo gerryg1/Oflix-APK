@@ -133,10 +133,25 @@ class PlayerActivity : ComponentActivity() {
             val coroutineScope = rememberCoroutineScope()
 
             // Main playback states
-            var videoUrl by remember { mutableStateOf(initialVideoUrl) }
             var videoTitle by remember { mutableStateOf(initialVideoTitle) }
             var subtitlesRaw by remember { mutableStateOf(initialSubtitlesRaw) }
             var downloadsRaw by remember { mutableStateOf(initialDownloadsRaw) }
+            
+            // Parse download entries for Quality: "url;;resolution;;label"
+            data class DownloadTrack(val url: String, val resolution: Int, val label: String)
+            val downloadTracks = remember(downloadsRaw) {
+                if (downloadsRaw.isNotEmpty()) {
+                    downloadsRaw.split("|").mapNotNull { entry ->
+                        val parts = entry.split(";;")
+                        if (parts.size >= 3 && parts[0].isNotEmpty()) {
+                            DownloadTrack(parts[0], parts[1].toIntOrNull() ?: 0, parts[2])
+                        } else null
+                    }
+                } else emptyList()
+            }
+
+            // Default to highest/first download MP4 if available, otherwise fallback to main videoUrl
+            var videoUrl by remember { mutableStateOf(downloadTracks.firstOrNull()?.url ?: initialVideoUrl) }
             
             var currentSeasonIdx by remember { mutableIntStateOf(initialSeasonIdx) }
             var currentEpisodeIdx by remember { mutableIntStateOf(initialEpisodeIdx) }
@@ -156,6 +171,8 @@ class PlayerActivity : ComponentActivity() {
                     android.provider.Settings.System.getInt(context.contentResolver, android.provider.Settings.System.SCREEN_BRIGHTNESS) / 255f
                 } catch (e: Exception) { 0.5f }
             ) }
+            var showBrightnessOverlay by remember { mutableStateOf(false) }
+
             // Apply brightness
             LaunchedEffect(brightness) {
                 activity?.window?.let { w ->
@@ -163,6 +180,9 @@ class PlayerActivity : ComponentActivity() {
                     attrs.screenBrightness = brightness
                     w.attributes = attrs
                 }
+                showBrightnessOverlay = true
+                delay(1500)
+                showBrightnessOverlay = false
             }
 
             var playbackSpeed by remember { mutableFloatStateOf(1f) }
@@ -186,19 +206,6 @@ class PlayerActivity : ComponentActivity() {
                 } else emptyList()
             }
             
-            // Parse download entries for Quality: "url;;resolution;;label"
-            data class DownloadTrack(val url: String, val resolution: Int, val label: String)
-            val downloadTracks = remember(downloadsRaw) {
-                if (downloadsRaw.isNotEmpty()) {
-                    downloadsRaw.split("|").mapNotNull { entry ->
-                        val parts = entry.split(";;")
-                        if (parts.size >= 3 && parts[0].isNotEmpty()) {
-                            DownloadTrack(parts[0], parts[1].toIntOrNull() ?: 0, parts[2])
-                        } else null
-                    }
-                } else emptyList()
-            }
-
             // Default subtitle
             val defaultSubIdx = remember(subtitleTracks) {
                 if (subtitleTracks.isEmpty()) -1
@@ -442,7 +449,7 @@ class PlayerActivity : ComponentActivity() {
                     visible = showControls || isLocked,
                     enter = fadeIn(),
                     exit = fadeOut(),
-                    modifier = Modifier.align(Alignment.CenterStart).padding(start = 32.dp)
+                    modifier = Modifier.align(Alignment.CenterEnd).padding(end = 32.dp)
                 ) {
                     IconButton(
                         onClick = { isLocked = !isLocked; showControls = true },
@@ -454,6 +461,32 @@ class PlayerActivity : ComponentActivity() {
                             tint = Color.White,
                             modifier = Modifier.size(28.dp)
                         )
+                    }
+                }
+
+                // Brightness Overlay (when dragged)
+                AnimatedVisibility(
+                    visible = showBrightnessOverlay && !isLocked,
+                    enter = fadeIn(),
+                    exit = fadeOut(),
+                    modifier = Modifier.align(Alignment.CenterStart).padding(start = 32.dp)
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier.background(Color(0x66000000), RoundedCornerShape(8.dp)).padding(12.dp)
+                    ) {
+                        Text("☀", fontSize = 24.sp, color = Color.White)
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Box(
+                            modifier = Modifier.width(6.dp).height(100.dp).clip(RoundedCornerShape(3.dp)).background(Color(0x66FFFFFF))
+                        ) {
+                            Box(
+                                modifier = Modifier.width(6.dp).fillMaxHeight(brightness).align(Alignment.BottomCenter)
+                                    .clip(RoundedCornerShape(3.dp)).background(Color(0xFFE50914))
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text("${(brightness * 100).toInt()}%", fontSize = 12.sp, color = Color.White, fontWeight = FontWeight.Bold)
                     }
                 }
 

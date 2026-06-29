@@ -11,13 +11,16 @@ android {
         applicationId = "com.oflix.app"
         minSdk = 24
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 2
+        versionName = "1.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
             useSupportLibrary = true
         }
+        
+        // Rename APK output to include app name, build type and version
+        setProperty("archivesBaseName", "Oflix-v1.1")
     }
 
     buildTypes {
