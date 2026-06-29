@@ -27,7 +27,9 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.MediaItem
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.ui.PlayerView
 
 class PlayerActivity : ComponentActivity() {
@@ -65,21 +67,40 @@ class PlayerActivity : ComponentActivity() {
         setContent {
             val context = LocalContext.current
             val player = remember {
-                ExoPlayer.Builder(context).build().apply {
-                    setMediaItem(MediaItem.fromUri(videoUrl))
-                    prepare()
-                    playWhenReady = true
-                    exoPlayer = this
+                // Custom DataSource with proper headers for video streaming
+                // This is critical: without these headers, origin servers reject the request
+                val httpDataSourceFactory = DefaultHttpDataSource.Factory()
+                    .setUserAgent("Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36")
+                    .setDefaultRequestProperties(mapOf(
+                        "Referer" to "https://netnaija.film/",
+                        "Origin" to "https://netnaija.film",
+                        "Accept" to "*/*",
+                        "Accept-Language" to "id-ID,id;q=0.9,en-US;q=0.8,en;q=0.7"
+                    ))
+                    .setConnectTimeoutMs(30_000)
+                    .setReadTimeoutMs(30_000)
+                    .setAllowCrossProtocolRedirects(true)
 
-                    addAnalyticsListener(object : androidx.media3.exoplayer.analytics.AnalyticsListener {
-                        override fun onAudioSessionIdChanged(
-                            eventTime: androidx.media3.exoplayer.analytics.AnalyticsListener.EventTime,
-                            audioSessionId: Int
-                        ) {
-                            applyAudioProcessing(audioSessionId)
-                        }
-                    })
-                }
+                val mediaSourceFactory = DefaultMediaSourceFactory(httpDataSourceFactory)
+
+                ExoPlayer.Builder(context)
+                    .setMediaSourceFactory(mediaSourceFactory)
+                    .build()
+                    .apply {
+                        setMediaItem(MediaItem.fromUri(videoUrl))
+                        prepare()
+                        playWhenReady = true
+                        exoPlayer = this
+
+                        addAnalyticsListener(object : androidx.media3.exoplayer.analytics.AnalyticsListener {
+                            override fun onAudioSessionIdChanged(
+                                eventTime: androidx.media3.exoplayer.analytics.AnalyticsListener.EventTime,
+                                audioSessionId: Int
+                            ) {
+                                applyAudioProcessing(audioSessionId)
+                            }
+                        })
+                    }
             }
 
             DisposableEffect(Unit) {

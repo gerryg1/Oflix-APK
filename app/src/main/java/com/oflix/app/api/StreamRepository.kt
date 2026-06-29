@@ -8,6 +8,10 @@ import com.google.gson.JsonObject
  */
 object StreamRepository {
 
+    // CF Worker proxy — mirrors videoProxy from lib/moviebox.js
+    // MP4 URLs MUST go through this proxy because origin servers block direct requests
+    private const val VIDEO_PROXY = "https://uid5558280582469143984atp3ext1774623069exp1782.eyjhbgcioijiuzi1niisinr5cci6ikpxvcj9eyj1awqiojy1nta3mda1mta1mz.workers.dev/?url="
+
     data class StreamResult(
         val success: Boolean,
         val videoUrl: String = "",
@@ -22,8 +26,17 @@ object StreamRepository {
     )
 
     /**
+     * Proxy MP4 URLs, leave HLS/m3u8 direct — exactly like JS proxyUrl()
+     */
+    private fun proxyUrl(rawUrl: String): String {
+        if (rawUrl.isEmpty()) return ""
+        if (rawUrl.contains(".m3u8") || rawUrl.contains("/playstream")) return rawUrl
+        return VIDEO_PROXY + java.net.URLEncoder.encode(rawUrl, "UTF-8")
+    }
+
+    /**
      * Fetch stream for a given subjectId + season/episode.
-     * Tries netnaija.film first (as requested), then fallback to aoneroom.
+     * Tries netnaija.film first, then fallback to aoneroom.
      */
     suspend fun fetchStream(subjectId: String, se: String, ep: String, detailPath: String): StreamResult {
         val aoneroomReferer = if (detailPath.isNotEmpty())
@@ -34,7 +47,7 @@ object StreamRepository {
             "https://netnaija.film/spa/videoPlayPage/movies/$detailPath?id=$subjectId&type=/movie/detail&detailSe=&detailEp=&lang=en"
         else "https://netnaija.film/"
 
-        // Try primary (netnaija.film - currently more reliable for play)
+        // Try primary (netnaija.film - more reliable for play)
         try {
             val netnaijaApi = ApiClient.getFallbackClient()
             val playRes = netnaijaApi.getPlay(referer = netnaijaReferer, id = subjectId, subjectId = subjectId, se = se, ep = ep)
@@ -71,6 +84,7 @@ object StreamRepository {
 
     /**
      * Mirrors transformStream() from lib/moviebox.js
+     * Key difference from before: ALL MP4 URLs are now proxied through CF Worker
      */
     private fun transformStream(playData: JsonObject?, dlData: JsonObject?): StreamResult {
         val downloads = mutableListOf<DownloadOption>()
@@ -79,9 +93,9 @@ object StreamRepository {
         if (dlData?.has("downloads") == true && dlData.get("downloads").isJsonArray) {
             for (dl in dlData.getAsJsonArray("downloads")) {
                 val dlObj = dl.asJsonObject
-                val url = dlObj.get("url")?.asString ?: continue
+                val rawUrl = dlObj.get("url")?.asString ?: continue
                 val res = try { dlObj.get("resolution")?.asString?.replace(Regex("[^0-9]"), "")?.toIntOrNull() ?: 0 } catch (_: Exception) { 0 }
-                downloads.add(DownloadOption(url = url, resolution = res, label = if (res > 0) "${res}p" else "Auto"))
+                downloads.add(DownloadOption(url = proxyUrl(rawUrl), resolution = res, label = if (res > 0) "${res}p" else "Auto"))
             }
         }
 
@@ -89,12 +103,12 @@ object StreamRepository {
         if (playData?.has("streams") == true && playData.get("streams").isJsonArray) {
             for (st in playData.getAsJsonArray("streams")) {
                 val stObj = st.asJsonObject
-                val url = stObj.get("url")?.asString ?: continue
+                val rawUrl = stObj.get("url")?.asString ?: continue
                 val res = try {
                     (stObj.get("resolutions")?.asString ?: stObj.get("resolution")?.asString ?: "0")
                         .replace(Regex("[^0-9]"), "").toIntOrNull() ?: 0
                 } catch (_: Exception) { 0 }
-                downloads.add(DownloadOption(url = url, resolution = res, label = if (res > 0) "${res}p" else "Auto"))
+                downloads.add(DownloadOption(url = proxyUrl(rawUrl), resolution = res, label = if (res > 0) "${res}p" else "Auto"))
             }
         }
 
@@ -102,10 +116,10 @@ object StreamRepository {
         if (dlData?.has("list") == true && dlData.get("list").isJsonArray) {
             for (d in dlData.getAsJsonArray("list")) {
                 val dObj = d.asJsonObject
-                val url = dObj.get("url")?.asString ?: dObj.get("path")?.asString ?: continue
+                val rawUrl = dObj.get("url")?.asString ?: dObj.get("path")?.asString ?: continue
                 val quality = dObj.get("quality")?.asString ?: ""
                 val res = quality.replace(Regex("[^0-9]"), "").toIntOrNull() ?: 0
-                downloads.add(DownloadOption(url = url, resolution = res, label = quality.ifEmpty { "Auto" }))
+                downloads.add(DownloadOption(url = proxyUrl(rawUrl), resolution = res, label = quality.ifEmpty { "Auto" }))
             }
         }
 
@@ -115,7 +129,7 @@ object StreamRepository {
 
         var mainUrl = unique.firstOrNull()?.url ?: ""
 
-        // Check HLS from play data
+        // Check HLS from play data — HLS goes direct (NOT proxied)
         if (playData?.has("hls") == true && playData.get("hls").isJsonArray) {
             val hlsArr = playData.getAsJsonArray("hls")
             if (hlsArr.size() > 0) {
