@@ -27,10 +27,15 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.SkipNext
+import androidx.compose.material.icons.filled.Speed
+import androidx.compose.material.icons.filled.Subtitles
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -150,8 +155,8 @@ class PlayerActivity : ComponentActivity() {
                 } else emptyList()
             }
 
-            // Default to highest/first download MP4 if available, otherwise fallback to main videoUrl
-            var videoUrl by remember { mutableStateOf(downloadTracks.firstOrNull()?.url ?: initialVideoUrl) }
+            // Default to initialVideoUrl to avoid playback bugs with expired download links
+            var videoUrl by remember { mutableStateOf(initialVideoUrl) }
             
             var currentSeasonIdx by remember { mutableIntStateOf(initialSeasonIdx) }
             var currentEpisodeIdx by remember { mutableIntStateOf(initialEpisodeIdx) }
@@ -667,10 +672,10 @@ class PlayerActivity : ComponentActivity() {
                                     .fillMaxWidth()
                                     .padding(horizontal = 24.dp)
                             ) {
-                                BottomAction(icon = "⚡", label = "Speed (${playbackSpeed}x)", onClick = { showSpeedMenu = true })
+                                BottomAction(icon = Icons.Default.Speed, label = "Speed (${playbackSpeed}x)", onClick = { showSpeedMenu = true })
                                 Spacer(modifier = Modifier.width(20.dp))
                                 if (seasons.isNotEmpty()) {
-                                    BottomAction(icon = "📑", label = "Episodes", onClick = { 
+                                    BottomAction(icon = Icons.Default.List, label = "Episodes", onClick = { 
                                         showEpisodesMenu = true
                                         player.pause()
                                         isPlaying = false
@@ -678,15 +683,15 @@ class PlayerActivity : ComponentActivity() {
                                     Spacer(modifier = Modifier.width(20.dp))
                                 }
                                 if (subtitleTracks.isNotEmpty()) {
-                                    BottomAction(icon = "💬", label = "Audio & Subtitles", onClick = { showSubtitleMenu = true })
+                                    BottomAction(icon = Icons.Default.Subtitles, label = "Audio & Subtitles", onClick = { showSubtitleMenu = true })
                                     Spacer(modifier = Modifier.width(20.dp))
                                 }
                                 if (downloadTracks.isNotEmpty()) {
-                                    BottomAction(icon = "⚙", label = "Auto : 1080p", onClick = { showQualityMenu = true })
+                                    BottomAction(icon = Icons.Default.Settings, label = "Auto : 1080p", onClick = { showQualityMenu = true })
                                     Spacer(modifier = Modifier.width(20.dp))
                                 }
                                 if (hasNextEpisode) {
-                                    BottomAction(icon = "⏭", label = "Next Episode", onClick = { playNextEpisode() })
+                                    BottomAction(icon = Icons.Default.SkipNext, label = "Next Episode", onClick = { playNextEpisode() })
                                 }
                             }
                         }
@@ -904,7 +909,7 @@ class PlayerActivity : ComponentActivity() {
 }
 
 @Composable
-private fun BottomAction(icon: String, label: String, onClick: () -> Unit) {
+private fun BottomAction(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, onClick: () -> Unit) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
@@ -912,12 +917,12 @@ private fun BottomAction(icon: String, label: String, onClick: () -> Unit) {
             .clickable { onClick() }
             .padding(horizontal = 10.dp, vertical = 8.dp)
     ) {
-        Text(icon, fontSize = 16.sp) // slightly larger icons
-        Spacer(modifier = Modifier.width(6.dp))
+        Icon(imageVector = icon, contentDescription = label, tint = Color.White, modifier = Modifier.size(20.dp))
+        Spacer(modifier = Modifier.width(8.dp))
         Text(
             text = label,
             color = Color.White,
-            fontSize = 13.sp,
+            fontSize = 14.sp,
             fontWeight = FontWeight.Bold
         )
     }
