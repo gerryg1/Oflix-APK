@@ -16,7 +16,14 @@ object StreamRepository {
         val success: Boolean,
         val videoUrl: String = "",
         val downloads: List<DownloadOption> = emptyList(),
+        val captions: List<CaptionData> = emptyList(),
         val error: String = ""
+    )
+
+    data class CaptionData(
+        val url: String,
+        val languageCode: String,
+        val language: String
     )
 
     data class DownloadOption(
@@ -146,11 +153,25 @@ object StreamRepository {
             mainUrl = best.url
         }
 
+        // Parse captions/subtitles from dlData.captions (mirrors JS moviebox.js)
+        val captions = mutableListOf<CaptionData>()
+        if (dlData?.has("captions") == true && dlData.get("captions").isJsonArray) {
+            for (cap in dlData.getAsJsonArray("captions")) {
+                if (!cap.isJsonObject) continue
+                val capObj = cap.asJsonObject
+                val capUrl = capObj.get("url")?.asString ?: continue
+                val lan = capObj.get("lan")?.asString ?: ""
+                val lanName = capObj.get("lanName")?.asString ?: lan
+                captions.add(CaptionData(url = capUrl, languageCode = lan, language = lanName))
+            }
+        }
+
         val hasContent = mainUrl.isNotEmpty() || unique.isNotEmpty()
         return StreamResult(
             success = hasContent,
             videoUrl = mainUrl,
             downloads = unique,
+            captions = captions,
             error = if (hasContent) "" else "No streams available"
         )
     }

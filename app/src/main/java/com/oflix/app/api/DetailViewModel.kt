@@ -46,7 +46,11 @@ sealed class DetailUiState {
 sealed class StreamUiState {
     object Idle : StreamUiState()
     object Loading : StreamUiState()
-    data class Ready(val videoUrl: String, val title: String) : StreamUiState()
+    data class Ready(
+        val videoUrl: String,
+        val title: String,
+        val subtitles: List<StreamRepository.CaptionData> = emptyList()
+    ) : StreamUiState()
     data class Error(val message: String) : StreamUiState()
 }
 
@@ -109,7 +113,11 @@ class DetailViewModel : ViewModel() {
                     val result = StreamRepository.fetchStream(subjectId, se, ep, detailPath)
                     lastResult = result
                     if (result.success && result.videoUrl.isNotEmpty()) {
-                        _streamState.value = StreamUiState.Ready(result.videoUrl, title)
+                        _streamState.value = StreamUiState.Ready(
+                            videoUrl = result.videoUrl,
+                            title = title,
+                            subtitles = result.captions
+                        )
                         return@launch
                     }
                     if (attempt < 3) kotlinx.coroutines.delay(500)

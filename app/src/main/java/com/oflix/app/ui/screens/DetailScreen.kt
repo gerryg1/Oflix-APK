@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -51,7 +52,11 @@ fun DetailScreen(
     LaunchedEffect(streamState) {
         if (streamState is StreamUiState.Ready) {
             val ready = streamState as StreamUiState.Ready
-            context.startActivity(PlayerActivity.createIntent(context, ready.videoUrl, ready.title))
+            // Pass subtitles as serialized JSON array
+            val subtitleJson = ready.subtitles.joinToString("|") { "${it.url};;${it.languageCode};;${it.language}" }
+            context.startActivity(
+                PlayerActivity.createIntent(context, ready.videoUrl, ready.title, subtitleJson)
+            )
             viewModel.resetStream()
         }
     }
@@ -91,10 +96,9 @@ fun DetailScreen(
                         Spacer(modifier = Modifier.height(16.dp))
                         Box(modifier = Modifier.width(100.dp).height(20.dp).clip(RoundedCornerShape(4.dp)).shimmerEffect())
                         Spacer(modifier = Modifier.height(12.dp))
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            repeat(3) {
-                                Box(modifier = Modifier.weight(1f).aspectRatio(16f / 9f).clip(RoundedCornerShape(8.dp)).shimmerEffect())
-                            }
+                        repeat(4) {
+                            Box(modifier = Modifier.fillMaxWidth().height(56.dp).clip(RoundedCornerShape(8.dp)).shimmerEffect())
+                            Spacer(modifier = Modifier.height(8.dp))
                         }
                     }
                 }
@@ -105,6 +109,8 @@ fun DetailScreen(
                 val optimizedCover = if (detail.coverUrl.isNotEmpty())
                     "https://funny-kitten-ad51d6.netlify.app/img?url=${java.net.URLEncoder.encode(detail.coverUrl, "UTF-8")}&w=600&q=80"
                 else ""
+
+                val isStreamLoading = streamState is StreamUiState.Loading
 
                 Column(
                     modifier = Modifier
@@ -175,7 +181,6 @@ fun DetailScreen(
                         }
 
                         // Watch Button
-                        val isStreamLoading = streamState is StreamUiState.Loading
                         val watchLabel = when {
                             detail.isMovie -> "▶  Tonton Film"
                             else -> "▶  Tonton Ep. 1"
@@ -248,81 +253,67 @@ fun DetailScreen(
                         }
 
                         // ═══════════════════════════════════════════════
-                        //  EPISODE LIST (Series only)
+                        //  EPISODE LIST (Series only) — clean row design
                         // ═══════════════════════════════════════════════
                         if (!detail.isMovie && detail.seasons.isNotEmpty()) {
                             Spacer(modifier = Modifier.height(8.dp))
 
-                            // Section Title + Season Tabs
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
+                            // Section Title
+                            Text(
+                                text = "Episode",
+                                color = Color.White,
+                                fontSize = 20.sp,
+                                fontWeight = FontWeight.ExtraBold,
                                 modifier = Modifier.padding(bottom = 12.dp)
-                            ) {
-                                Text(
-                                    text = "Episode",
-                                    color = Color.White,
-                                    fontSize = 18.sp,
-                                    fontWeight = FontWeight.ExtraBold
-                                )
-                                Spacer(modifier = Modifier.width(16.dp))
+                            )
 
-                                if (detail.seasons.size > 1) {
-                                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                        detail.seasons.forEachIndexed { idx, season ->
-                                            val isActive = idx == currentSeason
-                                            Text(
-                                                text = "Season ${season.season}",
-                                                color = if (isActive) Color.White else Color(0xFF888888),
-                                                fontSize = 12.sp,
-                                                fontWeight = FontWeight.Bold,
-                                                modifier = Modifier
-                                                    .clip(RoundedCornerShape(20.dp))
-                                                    .background(
-                                                        if (isActive) PrimaryRed else Color(0xFF1A1A1A)
-                                                    )
-                                                    .clickable { currentSeason = idx }
-                                                    .padding(horizontal = 14.dp, vertical = 6.dp)
-                                            )
-                                        }
+                            // Season Tabs
+                            if (detail.seasons.size > 1) {
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    modifier = Modifier.padding(bottom = 16.dp)
+                                ) {
+                                    detail.seasons.forEachIndexed { idx, season ->
+                                        val isActive = idx == currentSeason
+                                        Text(
+                                            text = "Season ${season.season}",
+                                            color = if (isActive) Color.White else Color(0xFF888888),
+                                            fontSize = 13.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            modifier = Modifier
+                                                .clip(RoundedCornerShape(20.dp))
+                                                .background(
+                                                    if (isActive) PrimaryRed else Color(0xFF1A1A1A)
+                                                )
+                                                .clickable { currentSeason = idx }
+                                                .padding(horizontal = 16.dp, vertical = 8.dp)
+                                        )
                                     }
                                 }
                             }
 
-                            // Episode Grid
+                            // Episode Rows — clean list like the screenshot
                             val episodes = detail.seasons.getOrNull(currentSeason)?.episodes ?: emptyList()
                             val seasonNum = detail.seasons.getOrNull(currentSeason)?.season ?: 1
 
-                            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                                // Show episodes in rows of 3
-                                episodes.chunked(3).forEach { rowEpisodes ->
-                                    Row(
-                                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                                        modifier = Modifier.fillMaxWidth()
-                                    ) {
-                                        rowEpisodes.forEach { ep ->
-                                            val epIdx = ep.episode - 1
-                                            EpisodeCard(
-                                                episodeNumber = ep.episode,
-                                                title = ep.title,
-                                                isLoading = isStreamLoading,
-                                                modifier = Modifier.weight(1f),
-                                                onClick = {
-                                                    val episodeTitle = "${detail.title} · S${seasonNum} E${ep.episode}"
-                                                    viewModel.loadStream(
-                                                        detail.subjectId,
-                                                        currentSeason,
-                                                        epIdx,
-                                                        episodeTitle,
-                                                        detail.detailPath
-                                                    )
-                                                }
+                            Column {
+                                episodes.forEach { ep ->
+                                    val epIdx = ep.episode - 1
+                                    EpisodeRow(
+                                        episodeNumber = ep.episode,
+                                        title = ep.title,
+                                        isLoading = isStreamLoading,
+                                        onClick = {
+                                            val episodeTitle = "${detail.title} · S${seasonNum} E${ep.episode}"
+                                            viewModel.loadStream(
+                                                detail.subjectId,
+                                                currentSeason,
+                                                epIdx,
+                                                episodeTitle,
+                                                detail.detailPath
                                             )
                                         }
-                                        // Fill remaining space if row isn't full
-                                        repeat(3 - rowEpisodes.size) {
-                                            Spacer(modifier = Modifier.weight(1f))
-                                        }
-                                    }
+                                    )
                                 }
                             }
                         }
@@ -355,61 +346,64 @@ fun DetailScreen(
     }
 }
 
+/**
+ * Clean episode row — number badge | Episode title | play arrow
+ * Matches the screenshot design exactly
+ */
 @Composable
-fun EpisodeCard(
+fun EpisodeRow(
     episodeNumber: Int,
     title: String,
     isLoading: Boolean,
-    modifier: Modifier = Modifier,
     onClick: () -> Unit
 ) {
-    Card(
-        modifier = modifier
-            .clickable(enabled = !isLoading) { onClick() },
-        shape = RoundedCornerShape(8.dp),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF161616))
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(enabled = !isLoading) { onClick() }
+            .padding(vertical = 14.dp)
     ) {
-        Column {
-            // Episode thumbnail placeholder with play icon
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .aspectRatio(16f / 9f)
-                    .background(Color(0xFF111111)),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Default.PlayArrow,
-                    contentDescription = "Play",
-                    tint = Color(0x99FFFFFF),
-                    modifier = Modifier.size(28.dp)
-                )
-                // Episode number badge
-                Text(
-                    text = "$episodeNumber",
-                    color = Color.White,
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.ExtraBold,
-                    modifier = Modifier
-                        .align(Alignment.TopStart)
-                        .padding(6.dp)
-                        .background(Color(0xCC000000), RoundedCornerShape(4.dp))
-                        .padding(horizontal = 6.dp, vertical = 2.dp)
-                )
-            }
-
-            // Episode title
+        // Number badge
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier = Modifier
+                .size(36.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .background(Color(0xFF1A1A1A))
+        ) {
             Text(
-                text = title,
-                color = Color(0xFFCCCCCC),
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Bold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp)
+                text = "$episodeNumber",
+                color = Color(0xFFAAAAAA),
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Bold
             )
         }
+
+        Spacer(modifier = Modifier.width(16.dp))
+
+        // Episode title
+        Text(
+            text = title,
+            color = Color.White,
+            fontSize = 15.sp,
+            fontWeight = FontWeight.Medium,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f)
+        )
+
+        // Play arrow
+        Icon(
+            imageVector = Icons.Default.PlayArrow,
+            contentDescription = "Play",
+            tint = Color(0xFF666666),
+            modifier = Modifier.size(24.dp)
+        )
     }
+
+    // Divider
+    HorizontalDivider(color = Color(0xFF1A1A1A), thickness = 1.dp)
 }
 
 @Composable
