@@ -25,6 +25,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -399,10 +401,10 @@ class PlayerActivity : ComponentActivity() {
                             ) {
                                 Box(contentAlignment = Alignment.Center) {
                                     Icon(
-                                        imageVector = androidx.compose.material.icons.Icons.Default.Refresh,
+                                        imageVector = Icons.Default.Refresh,
                                         contentDescription = "Rewind 10s",
                                         tint = Color.White,
-                                        modifier = Modifier.size(48.dp).androidx.compose.ui.draw.scale(scaleX = -1f, scaleY = 1f)
+                                        modifier = Modifier.size(48.dp).androidx.compose.ui.graphics.graphicsLayer(scaleX = -1f)
                                     )
                                     Text("10", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 2.dp))
                                 }
@@ -428,7 +430,7 @@ class PlayerActivity : ComponentActivity() {
                                 } else {
                                     // Play icon
                                     Icon(
-                                        imageVector = androidx.compose.material.icons.Icons.Default.PlayArrow,
+                                        imageVector = Icons.Default.PlayArrow,
                                         contentDescription = "Play",
                                         tint = Color.White,
                                         modifier = Modifier.size(42.dp)
@@ -443,7 +445,7 @@ class PlayerActivity : ComponentActivity() {
                             ) {
                                 Box(contentAlignment = Alignment.Center) {
                                     Icon(
-                                        imageVector = androidx.compose.material.icons.Icons.Default.Refresh,
+                                        imageVector = Icons.Default.Refresh,
                                         contentDescription = "Forward 10s",
                                         tint = Color.White,
                                         modifier = Modifier.size(48.dp)
@@ -484,8 +486,7 @@ class PlayerActivity : ComponentActivity() {
                                             .height(3.dp)
                                             .clip(RoundedCornerShape(1.5.dp)),
                                         color = Color(0x99FFFFFF), // Buffered white color
-                                        trackColor = Color(0x33FFFFFF), // Base track color
-                                        gapSize = 0.dp
+                                        trackColor = Color(0x33FFFFFF) // Base track color
                                     )
                                     
                                     // Primary Slider
