@@ -54,10 +54,24 @@ fun DetailScreen(
     LaunchedEffect(streamState) {
         if (streamState is StreamUiState.Ready) {
             val ready = streamState as StreamUiState.Ready
-            // Pass subtitles as serialized JSON array
             val subtitleJson = ready.subtitles.joinToString("|") { "${it.url};;${it.languageCode};;${it.language}" }
+            val downloadsJson = ready.downloads.joinToString("|") { "${it.url};;${it.resolution};;${it.label}" }
+            val detailState = uiState as? DetailUiState.Success
+            val seasonsJson = if (detailState != null) com.google.gson.Gson().toJson(detailState.detail.seasons) else "[]"
+            
             context.startActivity(
-                PlayerActivity.createIntent(context, ready.videoUrl, ready.title, subtitleJson)
+                PlayerActivity.createIntent(
+                    context = context,
+                    videoUrl = ready.videoUrl,
+                    title = ready.title,
+                    subtitles = subtitleJson,
+                    downloads = downloadsJson,
+                    subjectId = ready.subjectId,
+                    detailPath = ready.detailPath,
+                    seasonIdx = ready.seasonIdx,
+                    episodeIdx = ready.episodeIdx,
+                    seasonsJson = seasonsJson
+                )
             )
             viewModel.resetStream()
         }

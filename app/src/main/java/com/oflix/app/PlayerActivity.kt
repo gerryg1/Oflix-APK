@@ -11,22 +11,26 @@ import android.os.Build
 import android.os.Bundle
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.annotation.OptIn
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
+import androidx.compose.animation.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -51,7 +55,12 @@ import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.ui.PlayerView
+import com.google.gson.Gson
+import com.google.gson.reflect.TypeToken
+import com.oflix.app.api.SeasonData
+import com.oflix.app.api.StreamRepository
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 class PlayerActivity : ComponentActivity() {
 
@@ -64,12 +73,28 @@ class PlayerActivity : ComponentActivity() {
         private const val EXTRA_VIDEO_URL = "video_url"
         private const val EXTRA_VIDEO_TITLE = "video_title"
         private const val EXTRA_SUBTITLES = "subtitles"
+        private const val EXTRA_DOWNLOADS = "downloads"
+        private const val EXTRA_SUBJECT_ID = "subject_id"
+        private const val EXTRA_DETAIL_PATH = "detail_path"
+        private const val EXTRA_SEASON_IDX = "season_idx"
+        private const val EXTRA_EPISODE_IDX = "episode_idx"
+        private const val EXTRA_SEASONS_JSON = "seasons_json"
 
-        fun createIntent(context: Context, videoUrl: String, title: String = "", subtitles: String = ""): Intent {
+        fun createIntent(
+            context: Context, videoUrl: String, title: String = "", subtitles: String = "",
+            downloads: String = "", subjectId: String = "", detailPath: String = "",
+            seasonIdx: Int = 0, episodeIdx: Int = 0, seasonsJson: String = "[]"
+        ): Intent {
             return Intent(context, PlayerActivity::class.java).apply {
                 putExtra(EXTRA_VIDEO_URL, videoUrl)
                 putExtra(EXTRA_VIDEO_TITLE, title)
                 putExtra(EXTRA_SUBTITLES, subtitles)
+                putExtra(EXTRA_DOWNLOADS, downloads)
+                putExtra(EXTRA_SUBJECT_ID, subjectId)
+                putExtra(EXTRA_DETAIL_PATH, detailPath)
+                putExtra(EXTRA_SEASON_IDX, seasonIdx)
+                putExtra(EXTRA_EPISODE_IDX, episodeIdx)
+                putExtra(EXTRA_SEASONS_JSON, seasonsJson)
             }
         }
     }
@@ -85,45 +110,97 @@ class PlayerActivity : ComponentActivity() {
         )
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
 
-        val videoUrl = intent.getStringExtra(EXTRA_VIDEO_URL) ?: ""
-        val videoTitle = intent.getStringExtra(EXTRA_VIDEO_TITLE) ?: ""
-        val subtitlesRaw = intent.getStringExtra(EXTRA_SUBTITLES) ?: ""
+        val initialVideoUrl = intent.getStringExtra(EXTRA_VIDEO_URL) ?: ""
+        val initialVideoTitle = intent.getStringExtra(EXTRA_VIDEO_TITLE) ?: ""
+        val initialSubtitlesRaw = intent.getStringExtra(EXTRA_SUBTITLES) ?: ""
+        val initialDownloadsRaw = intent.getStringExtra(EXTRA_DOWNLOADS) ?: ""
+        
+        val subjectId = intent.getStringExtra(EXTRA_SUBJECT_ID) ?: ""
+        val detailPath = intent.getStringExtra(EXTRA_DETAIL_PATH) ?: ""
+        val initialSeasonIdx = intent.getIntExtra(EXTRA_SEASON_IDX, 0)
+        val initialEpisodeIdx = intent.getIntExtra(EXTRA_EPISODE_IDX, 0)
+        val seasonsJson = intent.getStringExtra(EXTRA_SEASONS_JSON) ?: "[]"
 
-        // Parse subtitle entries: "url;;langCode;;langName|url;;langCode;;langName"
-        data class SubtitleTrack(val url: String, val code: String, val name: String)
-        val subtitleTracks = if (subtitlesRaw.isNotEmpty()) {
-            subtitlesRaw.split("|").mapNotNull { entry ->
-                val parts = entry.split(";;")
-                if (parts.size >= 3 && parts[0].isNotEmpty()) {
-                    SubtitleTrack(parts[0], parts[1], parts[2])
-                } else null
-            }
-        } else emptyList()
+        // Parse Seasons
+        val seasons: List<SeasonData> = try {
+            val type = object : TypeToken<List<SeasonData>>() {}.type
+            Gson().fromJson(seasonsJson, type) ?: emptyList()
+        } catch (e: Exception) { emptyList() }
 
         setContent {
             val context = LocalContext.current
             val activity = context as? Activity
+            val coroutineScope = rememberCoroutineScope()
 
-            // Player state
+            // Main playback states
+            var videoUrl by remember { mutableStateOf(initialVideoUrl) }
+            var videoTitle by remember { mutableStateOf(initialVideoTitle) }
+            var subtitlesRaw by remember { mutableStateOf(initialSubtitlesRaw) }
+            var downloadsRaw by remember { mutableStateOf(initialDownloadsRaw) }
+            
+            var currentSeasonIdx by remember { mutableIntStateOf(initialSeasonIdx) }
+            var currentEpisodeIdx by remember { mutableIntStateOf(initialEpisodeIdx) }
+
+            // Player logic states
             var isPlaying by remember { mutableStateOf(true) }
             var currentPosition by remember { mutableLongStateOf(0L) }
             var bufferedPosition by remember { mutableLongStateOf(0L) }
             var totalDuration by remember { mutableLongStateOf(0L) }
             var showControls by remember { mutableStateOf(true) }
             var buffering by remember { mutableStateOf(true) }
+            var isLocked by remember { mutableStateOf(false) }
 
-            // Default to device brightness
+            // Brightness logic
             var brightness by remember { mutableFloatStateOf(
                 try {
                     android.provider.Settings.System.getInt(context.contentResolver, android.provider.Settings.System.SCREEN_BRIGHTNESS) / 255f
                 } catch (e: Exception) { 0.5f }
             ) }
+            // Apply brightness
+            LaunchedEffect(brightness) {
+                activity?.window?.let { w ->
+                    val attrs = w.attributes
+                    attrs.screenBrightness = brightness
+                    w.attributes = attrs
+                }
+            }
+
             var playbackSpeed by remember { mutableFloatStateOf(1f) }
+            
+            // Menus
             var showSpeedMenu by remember { mutableStateOf(false) }
             var showSubtitleMenu by remember { mutableStateOf(false) }
+            var showQualityMenu by remember { mutableStateOf(false) }
+            var showEpisodesMenu by remember { mutableStateOf(false) }
 
-            // Default to Indonesian if available, else first subtitle, else -1 (off)
-            val defaultSubIdx = remember {
+            // Parse subtitle entries: "url;;langCode;;langName"
+            data class SubtitleTrack(val url: String, val code: String, val name: String)
+            val subtitleTracks = remember(subtitlesRaw) {
+                if (subtitlesRaw.isNotEmpty()) {
+                    subtitlesRaw.split("|").mapNotNull { entry ->
+                        val parts = entry.split(";;")
+                        if (parts.size >= 3 && parts[0].isNotEmpty()) {
+                            SubtitleTrack(parts[0], parts[1], parts[2])
+                        } else null
+                    }
+                } else emptyList()
+            }
+            
+            // Parse download entries for Quality: "url;;resolution;;label"
+            data class DownloadTrack(val url: String, val resolution: Int, val label: String)
+            val downloadTracks = remember(downloadsRaw) {
+                if (downloadsRaw.isNotEmpty()) {
+                    downloadsRaw.split("|").mapNotNull { entry ->
+                        val parts = entry.split(";;")
+                        if (parts.size >= 3 && parts[0].isNotEmpty()) {
+                            DownloadTrack(parts[0], parts[1].toIntOrNull() ?: 0, parts[2])
+                        } else null
+                    }
+                } else emptyList()
+            }
+
+            // Default subtitle
+            val defaultSubIdx = remember(subtitleTracks) {
                 if (subtitleTracks.isEmpty()) -1
                 else {
                     val idIdx = subtitleTracks.indexOfFirst {
@@ -133,11 +210,18 @@ class PlayerActivity : ComponentActivity() {
                     if (idIdx != -1) idIdx else 0
                 }
             }
-            var selectedSubIdx by remember { mutableIntStateOf(defaultSubIdx) }
+            var selectedSubIdx by remember(subtitleTracks) { mutableIntStateOf(defaultSubIdx) }
+
+            // Handle Back Button (Block if locked)
+            BackHandler(enabled = true) {
+                if (!isLocked) {
+                    activity?.finish()
+                }
+            }
 
             // Auto-hide controls after 4 seconds
-            LaunchedEffect(showControls) {
-                if (showControls) {
+            LaunchedEffect(showControls, isLocked) {
+                if (showControls && !isLocked) {
                     delay(4000)
                     showControls = false
                 }
@@ -157,69 +241,64 @@ class PlayerActivity : ComponentActivity() {
                 }
             }
 
+            // ExoPlayer Initialization & Updates
             val player = remember {
                 val httpDataSourceFactory = DefaultHttpDataSource.Factory()
                     .setUserAgent("Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36")
-                    .setDefaultRequestProperties(mapOf(
-                        "Referer" to "https://netnaija.film/",
-                        "Origin" to "https://netnaija.film",
-                        "Accept" to "*/*"
-                    ))
-                    .setConnectTimeoutMs(30_000)
-                    .setReadTimeoutMs(30_000)
+                    .setDefaultRequestProperties(mapOf("Referer" to "https://netnaija.film/", "Origin" to "https://netnaija.film"))
                     .setAllowCrossProtocolRedirects(true)
-
                 val mediaSourceFactory = DefaultMediaSourceFactory(httpDataSourceFactory)
-
                 ExoPlayer.Builder(context)
                     .setMediaSourceFactory(mediaSourceFactory)
                     .build()
-                    .apply {
-                        // Build MediaItem with subtitle tracks
-                        val mediaItemBuilder = MediaItem.Builder().setUri(videoUrl)
+            }
 
-                        if (subtitleTracks.isNotEmpty()) {
-                            val subtitleConfigs = subtitleTracks.mapIndexed { idx, track ->
-                                MediaItem.SubtitleConfiguration.Builder(Uri.parse(track.url))
-                                    .setMimeType(
-                                        when {
-                                            track.url.contains(".vtt") -> MimeTypes.TEXT_VTT
-                                            track.url.contains(".srt") -> MimeTypes.APPLICATION_SUBRIP
-                                            track.url.contains(".ass") || track.url.contains(".ssa") -> MimeTypes.TEXT_SSA
-                                            else -> MimeTypes.TEXT_VTT
-                                        }
-                                    )
-                                    .setLanguage(track.code.ifEmpty { "und" })
-                                    .setLabel(track.name.ifEmpty { "Subtitle ${idx + 1}" })
-                                    .setSelectionFlags(if (idx == defaultSubIdx) C.SELECTION_FLAG_DEFAULT else 0)
-                                    .build()
-                            }
-                            mediaItemBuilder.setSubtitleConfigurations(subtitleConfigs)
-                        }
-
-                        setMediaItem(mediaItemBuilder.build())
-                        prepare()
-                        playWhenReady = true
-                        exoPlayer = this
-
-                        addAnalyticsListener(object : androidx.media3.exoplayer.analytics.AnalyticsListener {
-                            override fun onAudioSessionIdChanged(
-                                eventTime: androidx.media3.exoplayer.analytics.AnalyticsListener.EventTime,
-                                audioSessionId: Int
-                            ) {
-                                applyAudioProcessing(audioSessionId)
-                            }
-                        })
-
-                        // Apply initial track selection for subtitle
-                        if (defaultSubIdx != -1 && subtitleTracks.isNotEmpty()) {
-                            trackSelectionParameters = trackSelectionParameters
-                                .buildUpon()
-                                .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
-                                .setPreferredTextLanguage(subtitleTracks[defaultSubIdx].code.ifEmpty { null })
-                                .build()
-                        }
+            // Update Media Item when videoUrl changes
+            LaunchedEffect(videoUrl) {
+                if (videoUrl.isEmpty()) return@LaunchedEffect
+                
+                val mediaItemBuilder = MediaItem.Builder().setUri(videoUrl)
+                if (subtitleTracks.isNotEmpty()) {
+                    val subtitleConfigs = subtitleTracks.mapIndexed { idx, track ->
+                        MediaItem.SubtitleConfiguration.Builder(Uri.parse(track.url))
+                            .setMimeType(
+                                when {
+                                    track.url.contains(".vtt") -> MimeTypes.TEXT_VTT
+                                    track.url.contains(".srt") -> MimeTypes.APPLICATION_SUBRIP
+                                    track.url.contains(".ass") || track.url.contains(".ssa") -> MimeTypes.TEXT_SSA
+                                    else -> MimeTypes.TEXT_VTT
+                                }
+                            )
+                            .setLanguage(track.code.ifEmpty { "und" })
+                            .setLabel(track.name.ifEmpty { "Subtitle ${idx + 1}" })
+                            .setSelectionFlags(if (idx == defaultSubIdx) C.SELECTION_FLAG_DEFAULT else 0)
+                            .build()
                     }
+                    mediaItemBuilder.setSubtitleConfigurations(subtitleConfigs)
+                }
+
+                player.setMediaItem(mediaItemBuilder.build())
+                player.prepare()
+                player.playWhenReady = true
+                exoPlayer = player
+
+                // Initial Subtitle selection
+                if (defaultSubIdx != -1 && subtitleTracks.isNotEmpty()) {
+                    player.trackSelectionParameters = player.trackSelectionParameters
+                        .buildUpon()
+                        .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
+                        .setPreferredTextLanguage(subtitleTracks[defaultSubIdx].code.ifEmpty { null })
+                        .build()
+                }
+
+                player.addAnalyticsListener(object : androidx.media3.exoplayer.analytics.AnalyticsListener {
+                    override fun onAudioSessionIdChanged(
+                        eventTime: androidx.media3.exoplayer.analytics.AnalyticsListener.EventTime,
+                        audioSessionId: Int
+                    ) {
+                        applyAudioProcessing(audioSessionId)
+                    }
+                })
             }
 
             DisposableEffect(Unit) {
@@ -228,45 +307,74 @@ class PlayerActivity : ComponentActivity() {
                     player.release()
                 }
             }
-
-            // Apply brightness
-            LaunchedEffect(brightness) {
-                activity?.window?.let { w ->
-                    val attrs = w.attributes
-                    attrs.screenBrightness = brightness
-                    w.attributes = attrs
+            
+            // Function to fetch a new stream (change episode)
+            fun playEpisode(sIdx: Int, eIdx: Int) {
+                if (sIdx < 0 || sIdx >= seasons.size) return
+                val season = seasons[sIdx]
+                if (eIdx < 0 || eIdx >= season.episodes.size) return
+                val episode = season.episodes[eIdx]
+                
+                buffering = true
+                showEpisodesMenu = false
+                currentSeasonIdx = sIdx
+                currentEpisodeIdx = eIdx
+                videoTitle = episode.title
+                
+                coroutineScope.launch {
+                    val se = (sIdx + 1).toString()
+                    val ep = (eIdx + 1).toString()
+                    var result: StreamRepository.StreamResult? = null
+                    
+                    // Retry up to 3 times
+                    for (i in 1..3) {
+                        result = StreamRepository.fetchStream(subjectId, se, ep, detailPath)
+                        if (result.success && result.videoUrl.isNotEmpty()) break
+                        delay(500)
+                    }
+                    
+                    if (result != null && result.success && result.videoUrl.isNotEmpty()) {
+                        subtitlesRaw = result.captions.joinToString("|") { "${it.url};;${it.languageCode};;${it.language}" }
+                        downloadsRaw = result.downloads.joinToString("|") { "${it.url};;${it.resolution};;${it.label}" }
+                        videoUrl = result.videoUrl
+                    } else {
+                        // Error loading stream
+                        buffering = false
+                    }
                 }
             }
+
+            fun playNextEpisode() {
+                if (seasons.isEmpty()) return
+                val currentSeason = seasons.getOrNull(currentSeasonIdx) ?: return
+                if (currentEpisodeIdx + 1 < currentSeason.episodes.size) {
+                    playEpisode(currentSeasonIdx, currentEpisodeIdx + 1)
+                } else if (currentSeasonIdx + 1 < seasons.size) {
+                    playEpisode(currentSeasonIdx + 1, 0)
+                }
+            }
+
+            val hasNextEpisode = seasons.isNotEmpty() && (
+                (seasons.getOrNull(currentSeasonIdx)?.episodes?.size ?: 0) > currentEpisodeIdx + 1 ||
+                currentSeasonIdx + 1 < seasons.size
+            )
 
             Box(
                 modifier = Modifier
                     .fillMaxSize()
                     .background(Color.Black)
-                    .pointerInput(Unit) {
-                        detectTapGestures(
-                            onTap = { showControls = !showControls },
-                            onDoubleTap = { offset ->
-                                val w = size.width
-                                if (offset.x < w / 3) {
-                                    player.seekTo(player.currentPosition - 10_000)
-                                } else if (offset.x > w * 2 / 3) {
-                                    player.seekTo(player.currentPosition + 10_000)
-                                }
-                            }
-                        )
-                    }
             ) {
-                // Video View — hide built-in controls since we have custom ones
+                // Video View
                 AndroidView(
                     factory = { ctx ->
                         PlayerView(ctx).apply {
                             this.player = player
-                            useController = false  // We build our own controls
-                            setShowBuffering(PlayerView.SHOW_BUFFERING_NEVER) // Using custom spinner
+                            useController = false  
+                            setShowBuffering(PlayerView.SHOW_BUFFERING_NEVER) 
 
                             // Subtitle styling matching globals.css
                             subtitleView?.apply {
-                                setFractionalTextSize(androidx.media3.ui.SubtitleView.DEFAULT_TEXT_SIZE_FRACTION * 1.2f)
+                                setFractionalTextSize(androidx.media3.ui.SubtitleView.DEFAULT_TEXT_SIZE_FRACTION * 1.1f)
                                 setStyle(
                                     androidx.media3.ui.CaptionStyleCompat(
                                         android.graphics.Color.WHITE,
@@ -276,17 +384,49 @@ class PlayerActivity : ComponentActivity() {
                                         android.graphics.Color.BLACK,
                                         try {
                                             android.graphics.Typeface.createFromAsset(ctx.assets, "fonts/NetflixSans-Bold.otf")
-                                        } catch (e: Exception) {
-                                            null
-                                        }
+                                        } catch (e: Exception) { null }
                                     )
                                 )
                                 setBottomPaddingFraction(0.15f)
                             }
                         }
                     },
-                    modifier = Modifier.fillMaxSize()
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .pointerInput(isLocked) {
+                            detectTapGestures(
+                                onTap = { 
+                                    if (!isLocked) showControls = !showControls 
+                                    else showControls = true // Wake up just to show Lock icon
+                                },
+                                onDoubleTap = { offset ->
+                                    if (!isLocked) {
+                                        val w = size.width
+                                        if (offset.x < w / 3) player.seekTo(player.currentPosition - 10_000)
+                                        else if (offset.x > w * 2 / 3) player.seekTo(player.currentPosition + 10_000)
+                                    }
+                                }
+                            )
+                        }
                 )
+
+                // Invisible overlay on the left 30% for Brightness gesture (only when not locked)
+                if (!isLocked) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxHeight()
+                            .fillMaxWidth(0.3f)
+                            .align(Alignment.CenterStart)
+                            .pointerInput(Unit) {
+                                detectVerticalDragGestures { change, dragAmount ->
+                                    change.consume()
+                                    // dragAmount is positive when dragging down (reduce brightness)
+                                    val sensitivity = 0.002f
+                                    brightness = (brightness - (dragAmount * sensitivity)).coerceIn(0.05f, 1f)
+                                }
+                            }
+                    )
+                }
 
                 // Buffering indicator
                 if (buffering) {
@@ -297,11 +437,31 @@ class PlayerActivity : ComponentActivity() {
                     )
                 }
 
+                // Lock Icon Button (always visible when locked, visible when showControls if unlocked)
+                AnimatedVisibility(
+                    visible = showControls || isLocked,
+                    enter = fadeIn(),
+                    exit = fadeOut(),
+                    modifier = Modifier.align(Alignment.CenterStart).padding(start = 32.dp)
+                ) {
+                    IconButton(
+                        onClick = { isLocked = !isLocked; showControls = true },
+                        modifier = Modifier.size(56.dp).clip(CircleShape).background(Color(0x66000000))
+                    ) {
+                        Icon(
+                            imageVector = if (isLocked) Icons.Default.Lock else Icons.Default.LockOpen,
+                            contentDescription = "Lock",
+                            tint = Color.White,
+                            modifier = Modifier.size(28.dp)
+                        )
+                    }
+                }
+
                 // ═══════════════════════════════════════════════
-                //  CUSTOM CONTROLS OVERLAY
+                //  CUSTOM CONTROLS OVERLAY (HIDDEN IF LOCKED)
                 // ═══════════════════════════════════════════════
                 AnimatedVisibility(
-                    visible = showControls,
+                    visible = showControls && !isLocked,
                     enter = fadeIn(),
                     exit = fadeOut(),
                     modifier = Modifier.fillMaxSize()
@@ -309,20 +469,27 @@ class PlayerActivity : ComponentActivity() {
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
-                            .background(Color(0x66000000))
+                            .background(
+                                Brush.verticalGradient(
+                                    0.0f to Color(0xAA000000),
+                                    0.2f to Color.Transparent,
+                                    0.7f to Color.Transparent,
+                                    1.0f to Color(0xDD000000)
+                                )
+                            )
                     ) {
                         // ── TOP BAR: Title + Close ──
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(horizontal = 16.dp, vertical = 12.dp)
+                                .padding(horizontal = 24.dp, vertical = 24.dp)
                                 .align(Alignment.TopCenter)
                         ) {
                             Text(
                                 text = videoTitle,
                                 color = Color.White,
-                                fontSize = 14.sp,
+                                fontSize = 16.sp,
                                 fontWeight = FontWeight.Bold,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
@@ -333,81 +500,30 @@ class PlayerActivity : ComponentActivity() {
                                     imageVector = Icons.Default.Close,
                                     contentDescription = "Close",
                                     tint = Color.White,
-                                    modifier = Modifier.size(24.dp)
+                                    modifier = Modifier.size(28.dp)
                                 )
                             }
-                        }
-
-                        // ── LEFT: Brightness Slider (vertical) ──
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            modifier = Modifier
-                                .align(Alignment.CenterStart)
-                                .padding(start = 16.dp)
-                                .width(32.dp)
-                        ) {
-                            Text("☀", fontSize = 14.sp)
-                            Spacer(modifier = Modifier.height(4.dp))
-                            // Vertical slider simulated with a Box
-                            Box(
-                                modifier = Modifier
-                                    .width(4.dp)
-                                    .height(120.dp)
-                                    .clip(RoundedCornerShape(2.dp))
-                                    .background(Color(0x66FFFFFF))
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .width(4.dp)
-                                        .fillMaxHeight(brightness)
-                                        .align(Alignment.BottomCenter)
-                                        .clip(RoundedCornerShape(2.dp))
-                                        .background(Color(0xFFE50914))
-                                )
-                            }
-                            Spacer(modifier = Modifier.height(8.dp))
-                            // Brightness up/down
-                            Text(
-                                text = "+",
-                                color = Color.White,
-                                fontSize = 18.sp,
-                                fontWeight = FontWeight.Bold,
-                                modifier = Modifier
-                                    .clip(CircleShape)
-                                    .clickable { brightness = (brightness + 0.1f).coerceAtMost(1f) }
-                                    .padding(4.dp)
-                            )
-                            Text(
-                                text = "−",
-                                color = Color.White,
-                                fontSize = 18.sp,
-                                fontWeight = FontWeight.Bold,
-                                modifier = Modifier
-                                    .clip(CircleShape)
-                                    .clickable { brightness = (brightness - 0.1f).coerceAtLeast(0.05f) }
-                                    .padding(4.dp)
-                            )
                         }
 
                         // ── CENTER: Rewind / Play-Pause / Forward ──
                         Row(
-                            horizontalArrangement = Arrangement.spacedBy(40.dp),
+                            horizontalArrangement = Arrangement.spacedBy(50.dp),
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier.align(Alignment.Center)
                         ) {
                             // Rewind 10s
                             IconButton(
                                 onClick = { player.seekTo(player.currentPosition - 10_000) },
-                                modifier = Modifier.size(56.dp)
+                                modifier = Modifier.size(64.dp)
                             ) {
                                 Box(contentAlignment = Alignment.Center) {
                                     Icon(
                                         imageVector = Icons.Default.Refresh,
                                         contentDescription = "Rewind 10s",
                                         tint = Color.White,
-                                        modifier = Modifier.size(48.dp).graphicsLayer { scaleX = -1f }
+                                        modifier = Modifier.size(52.dp).graphicsLayer { scaleX = -1f }
                                     )
-                                    Text("10", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 2.dp))
+                                    Text("10", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 2.dp))
                                 }
                             }
 
@@ -418,15 +534,15 @@ class PlayerActivity : ComponentActivity() {
                                     isPlaying = player.isPlaying
                                 },
                                 modifier = Modifier
-                                    .size(72.dp)
+                                    .size(80.dp)
                                     .clip(CircleShape)
-                                    .background(Color(0x33FFFFFF))
+                                    .background(Color(0x44FFFFFF))
                             ) {
                                 if (isPlaying) {
                                     // Pause icon (two vertical bars)
-                                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                        Box(modifier = Modifier.width(6.dp).height(24.dp).background(Color.White))
-                                        Box(modifier = Modifier.width(6.dp).height(24.dp).background(Color.White))
+                                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        Box(modifier = Modifier.width(8.dp).height(28.dp).background(Color.White))
+                                        Box(modifier = Modifier.width(8.dp).height(28.dp).background(Color.White))
                                     }
                                 } else {
                                     // Play icon
@@ -434,7 +550,7 @@ class PlayerActivity : ComponentActivity() {
                                         imageVector = Icons.Default.PlayArrow,
                                         contentDescription = "Play",
                                         tint = Color.White,
-                                        modifier = Modifier.size(42.dp)
+                                        modifier = Modifier.size(48.dp)
                                     )
                                 }
                             }
@@ -442,16 +558,16 @@ class PlayerActivity : ComponentActivity() {
                             // Forward 10s
                             IconButton(
                                 onClick = { player.seekTo(player.currentPosition + 10_000) },
-                                modifier = Modifier.size(56.dp)
+                                modifier = Modifier.size(64.dp)
                             ) {
                                 Box(contentAlignment = Alignment.Center) {
                                     Icon(
                                         imageVector = Icons.Default.Refresh,
                                         contentDescription = "Forward 10s",
                                         tint = Color.White,
-                                        modifier = Modifier.size(48.dp)
+                                        modifier = Modifier.size(52.dp)
                                     )
-                                    Text("10", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 2.dp))
+                                    Text("10", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 2.dp))
                                 }
                             }
                         }
@@ -461,19 +577,14 @@ class PlayerActivity : ComponentActivity() {
                             modifier = Modifier
                                 .align(Alignment.BottomCenter)
                                 .fillMaxWidth()
-                                .background(
-                                    Brush.verticalGradient(
-                                        colors = listOf(Color.Transparent, Color(0xCC000000))
-                                    )
-                                )
-                                .padding(bottom = 8.dp)
+                                .padding(bottom = 16.dp)
                         ) {
                             // Progress Slider with Buffering Track
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(horizontal = 16.dp)
+                                    .padding(horizontal = 24.dp)
                             ) {
                                 val progress = if (totalDuration > 0) currentPosition.toFloat() / totalDuration.toFloat() else 0f
                                 val bufferProgress = if (totalDuration > 0) bufferedPosition.toFloat() / totalDuration.toFloat() else 0f
@@ -484,10 +595,10 @@ class PlayerActivity : ComponentActivity() {
                                         progress = bufferProgress,
                                         modifier = Modifier
                                             .fillMaxWidth()
-                                            .height(3.dp)
-                                            .clip(RoundedCornerShape(1.5.dp)),
-                                        color = Color(0x99FFFFFF), // Buffered white color
-                                        trackColor = Color(0x33FFFFFF) // Base track color
+                                            .height(4.dp)
+                                            .clip(RoundedCornerShape(2.dp)),
+                                        color = Color(0x66FFFFFF), 
+                                        trackColor = Color(0x33FFFFFF) 
                                     )
                                     
                                     // Primary Slider
@@ -499,35 +610,84 @@ class PlayerActivity : ComponentActivity() {
                                         colors = SliderDefaults.colors(
                                             thumbColor = Color(0xFFE50914),
                                             activeTrackColor = Color(0xFFE50914),
-                                            inactiveTrackColor = Color.Transparent // Hide so we see the buffering track
+                                            inactiveTrackColor = Color.Transparent 
                                         ),
                                         modifier = Modifier.fillMaxWidth()
                                     )
                                 }
 
-                                Spacer(modifier = Modifier.width(12.dp))
+                                Spacer(modifier = Modifier.width(16.dp))
                                 Text(
                                     text = formatTime(currentPosition) + " / " + formatTime(totalDuration),
                                     color = Color.White,
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Medium
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Bold
                                 )
                             }
 
-                            Spacer(modifier = Modifier.height(4.dp))
+                            Spacer(modifier = Modifier.height(8.dp))
 
-                            // Bottom action bar: Speed | Episodes | Subtitles | Quality | Next
+                            // Bottom action bar
                             Row(
-                                horizontalArrangement = Arrangement.SpaceEvenly,
+                                horizontalArrangement = Arrangement.Center,
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(horizontal = 16.dp, vertical = 8.dp)
+                                    .padding(horizontal = 24.dp)
                             ) {
                                 BottomAction(icon = "⚡", label = "Speed (${playbackSpeed}x)", onClick = { showSpeedMenu = true })
-                                BottomAction(icon = "📑", label = "Episodes", onClick = { /* TODO */ })
-                                BottomAction(icon = "💬", label = "Audio & Subtitles", onClick = { showSubtitleMenu = true })
-                                BottomAction(icon = "⚙", label = "Auto : 1080p", onClick = { /* TODO */ })
-                                BottomAction(icon = "⏭", label = "Next Episode", onClick = { /* TODO */ })
+                                Spacer(modifier = Modifier.width(20.dp))
+                                if (seasons.isNotEmpty()) {
+                                    BottomAction(icon = "📑", label = "Episodes", onClick = { 
+                                        showEpisodesMenu = true
+                                        player.pause()
+                                        isPlaying = false
+                                    })
+                                    Spacer(modifier = Modifier.width(20.dp))
+                                }
+                                if (subtitleTracks.isNotEmpty()) {
+                                    BottomAction(icon = "💬", label = "Audio & Subtitles", onClick = { showSubtitleMenu = true })
+                                    Spacer(modifier = Modifier.width(20.dp))
+                                }
+                                if (downloadTracks.isNotEmpty()) {
+                                    BottomAction(icon = "⚙", label = "Auto : 1080p", onClick = { showQualityMenu = true })
+                                    Spacer(modifier = Modifier.width(20.dp))
+                                }
+                                if (hasNextEpisode) {
+                                    BottomAction(icon = "⏭", label = "Next Episode", onClick = { playNextEpisode() })
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // ── Quality Menu Dropdown ──
+                if (showQualityMenu) {
+                    Box(modifier = Modifier.fillMaxSize().background(Color(0xAA000000)).clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { showQualityMenu = false }, contentAlignment = Alignment.Center) {
+                        Card(shape = RoundedCornerShape(12.dp), colors = CardDefaults.cardColors(containerColor = Color(0xFF1A1A1A))) {
+                            Column(modifier = Modifier.padding(8.dp).widthIn(min = 200.dp)) {
+                                Text("Quality", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp, modifier = Modifier.padding(12.dp))
+                                // Auto HLS Option
+                                Text(
+                                    text = "Auto (HLS)",
+                                    color = if (videoUrl.contains(".m3u8")) Color(0xFFE50914) else Color.White,
+                                    fontSize = 14.sp,
+                                    fontWeight = if (videoUrl.contains(".m3u8")) FontWeight.Bold else FontWeight.Normal,
+                                    modifier = Modifier.fillMaxWidth().clickable { showQualityMenu = false }.padding(horizontal = 16.dp, vertical = 12.dp)
+                                )
+                                // Downloads (MP4 options)
+                                downloadTracks.forEach { track ->
+                                    val isSelected = videoUrl == track.url
+                                    Text(
+                                        text = "${track.resolution}p ${track.label}",
+                                        color = if (isSelected) Color(0xFFE50914) else Color.White,
+                                        fontSize = 14.sp,
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                        modifier = Modifier.fillMaxWidth().clickable {
+                                            videoUrl = track.url
+                                            showQualityMenu = false
+                                        }.padding(horizontal = 16.dp, vertical = 12.dp)
+                                    )
+                                }
                             }
                         }
                     }
@@ -535,28 +695,10 @@ class PlayerActivity : ComponentActivity() {
 
                 // ── Speed Menu Dropdown ──
                 if (showSpeedMenu) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .background(Color(0xAA000000))
-                            .clickable(
-                                interactionSource = remember { MutableInteractionSource() },
-                                indication = null
-                            ) { showSpeedMenu = false },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Card(
-                            shape = RoundedCornerShape(12.dp),
-                            colors = CardDefaults.cardColors(containerColor = Color(0xFF1A1A1A))
-                        ) {
+                    Box(modifier = Modifier.fillMaxSize().background(Color(0xAA000000)).clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { showSpeedMenu = false }, contentAlignment = Alignment.Center) {
+                        Card(shape = RoundedCornerShape(12.dp), colors = CardDefaults.cardColors(containerColor = Color(0xFF1A1A1A))) {
                             Column(modifier = Modifier.padding(8.dp)) {
-                                Text(
-                                    "Playback Speed",
-                                    color = Color.White,
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 14.sp,
-                                    modifier = Modifier.padding(12.dp)
-                                )
+                                Text("Playback Speed", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp, modifier = Modifier.padding(12.dp))
                                 listOf(0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 2.0f).forEach { spd ->
                                     val isSelected = playbackSpeed == spd
                                     Text(
@@ -564,14 +706,7 @@ class PlayerActivity : ComponentActivity() {
                                         color = if (isSelected) Color(0xFFE50914) else Color.White,
                                         fontSize = 14.sp,
                                         fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .clickable {
-                                                playbackSpeed = spd
-                                                player.setPlaybackSpeed(spd)
-                                                showSpeedMenu = false
-                                            }
-                                            .padding(horizontal = 16.dp, vertical = 12.dp)
+                                        modifier = Modifier.fillMaxWidth().clickable { playbackSpeed = spd; player.setPlaybackSpeed(spd); showSpeedMenu = false }.padding(horizontal = 16.dp, vertical = 12.dp)
                                     )
                                 }
                             }
@@ -581,55 +716,21 @@ class PlayerActivity : ComponentActivity() {
 
                 // ── Subtitle Menu Dropdown ──
                 if (showSubtitleMenu) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .background(Color(0xAA000000))
-                            .clickable(
-                                interactionSource = remember { MutableInteractionSource() },
-                                indication = null
-                            ) { showSubtitleMenu = false },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Card(
-                            shape = RoundedCornerShape(12.dp),
-                            colors = CardDefaults.cardColors(containerColor = Color(0xFF1A1A1A))
-                        ) {
+                    Box(modifier = Modifier.fillMaxSize().background(Color(0xAA000000)).clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { showSubtitleMenu = false }, contentAlignment = Alignment.Center) {
+                        Card(shape = RoundedCornerShape(12.dp), colors = CardDefaults.cardColors(containerColor = Color(0xFF1A1A1A))) {
                             Column(modifier = Modifier.padding(8.dp).widthIn(min = 200.dp)) {
-                                Text(
-                                    "Audio & Subtitles",
-                                    color = Color.White,
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 14.sp,
-                                    modifier = Modifier.padding(12.dp)
-                                )
-                                // Off option
+                                Text("Audio & Subtitles", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp, modifier = Modifier.padding(12.dp))
                                 Text(
                                     text = "Off",
                                     color = if (selectedSubIdx == -1) Color(0xFFE50914) else Color.White,
                                     fontSize = 14.sp,
                                     fontWeight = if (selectedSubIdx == -1) FontWeight.Bold else FontWeight.Normal,
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clickable {
-                                            selectedSubIdx = -1
-                                            // Disable all text tracks
-                                            player.trackSelectionParameters = player.trackSelectionParameters
-                                                .buildUpon()
-                                                .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
-                                                .build()
-                                            showSubtitleMenu = false
-                                        }
-                                        .padding(horizontal = 16.dp, vertical = 12.dp)
+                                    modifier = Modifier.fillMaxWidth().clickable {
+                                        selectedSubIdx = -1
+                                        player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true).build()
+                                        showSubtitleMenu = false
+                                    }.padding(horizontal = 16.dp, vertical = 12.dp)
                                 )
-                                if (subtitleTracks.isEmpty()) {
-                                    Text(
-                                        text = "No subtitles available",
-                                        color = Color(0xFF666666),
-                                        fontSize = 13.sp,
-                                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
-                                    )
-                                }
                                 subtitleTracks.forEachIndexed { idx, track ->
                                     val isSelected = selectedSubIdx == idx
                                     Text(
@@ -637,20 +738,86 @@ class PlayerActivity : ComponentActivity() {
                                         color = if (isSelected) Color(0xFFE50914) else Color.White,
                                         fontSize = 14.sp,
                                         fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .clickable {
-                                                selectedSubIdx = idx
-                                                // Enable text tracks
-                                                player.trackSelectionParameters = player.trackSelectionParameters
-                                                    .buildUpon()
-                                                    .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
-                                                    .setPreferredTextLanguage(track.code.ifEmpty { null })
-                                                    .build()
-                                                showSubtitleMenu = false
-                                            }
-                                            .padding(horizontal = 16.dp, vertical = 12.dp)
+                                        modifier = Modifier.fillMaxWidth().clickable {
+                                            selectedSubIdx = idx
+                                            player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false).setPreferredTextLanguage(track.code.ifEmpty { null }).build()
+                                            showSubtitleMenu = false
+                                        }.padding(horizontal = 16.dp, vertical = 12.dp)
                                     )
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                // ── Episodes Slide-Up Panel ──
+                AnimatedVisibility(
+                    visible = showEpisodesMenu,
+                    enter = slideInVertically(initialOffsetY = { it }),
+                    exit = slideOutVertically(targetOffsetY = { it }),
+                    modifier = Modifier.fillMaxSize()
+                ) {
+                    Box(modifier = Modifier.fillMaxSize().background(Color(0xAA000000))) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth(0.5f)
+                                .fillMaxHeight()
+                                .align(Alignment.CenterEnd)
+                                .background(Color(0xFF141414))
+                        ) {
+                            // Header
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.fillMaxWidth().padding(16.dp)
+                            ) {
+                                Text(
+                                    text = "Episodes",
+                                    color = Color.White,
+                                    fontSize = 18.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                IconButton(onClick = { 
+                                    showEpisodesMenu = false 
+                                    player.play()
+                                    isPlaying = true
+                                }) {
+                                    Icon(imageVector = Icons.Default.Close, contentDescription = "Close Episodes", tint = Color.White)
+                                }
+                            }
+                            
+                            // List of Episodes
+                            LazyColumn(modifier = Modifier.fillMaxSize()) {
+                                seasons.forEachIndexed { sIdx, season ->
+                                    item {
+                                        Text(
+                                            text = "Season ${season.season}",
+                                            color = Color(0xFF888888),
+                                            fontSize = 14.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            modifier = Modifier.padding(start = 16.dp, top = 16.dp, bottom = 8.dp)
+                                        )
+                                    }
+                                    itemsIndexed(season.episodes) { eIdx, ep ->
+                                        val isCurrent = sIdx == currentSeasonIdx && eIdx == currentEpisodeIdx
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .clickable { playEpisode(sIdx, eIdx) }
+                                                .background(if (isCurrent) Color(0x33E50914) else Color.Transparent)
+                                                .padding(horizontal = 16.dp, vertical = 16.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Text(
+                                                text = "${ep.episode}. ${ep.title}",
+                                                color = if (isCurrent) Color.White else Color(0xFFCCCCCC),
+                                                fontSize = 14.sp,
+                                                fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Normal,
+                                                maxLines = 2,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -710,15 +877,15 @@ private fun BottomAction(icon: String, label: String, onClick: () -> Unit) {
         modifier = Modifier
             .clip(RoundedCornerShape(8.dp))
             .clickable { onClick() }
-            .padding(horizontal = 12.dp, vertical = 8.dp)
+            .padding(horizontal = 10.dp, vertical = 8.dp)
     ) {
-        Text(icon, fontSize = 14.sp)
+        Text(icon, fontSize = 16.sp) // slightly larger icons
         Spacer(modifier = Modifier.width(6.dp))
         Text(
             text = label,
             color = Color.White,
-            fontSize = 12.sp,
-            fontWeight = FontWeight.Medium
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Bold
         )
     }
 }

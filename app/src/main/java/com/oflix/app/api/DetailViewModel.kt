@@ -56,7 +56,12 @@ sealed class StreamUiState {
     data class Ready(
         val videoUrl: String,
         val title: String,
-        val subtitles: List<StreamRepository.CaptionData> = emptyList()
+        val subtitles: List<StreamRepository.CaptionData> = emptyList(),
+        val downloads: List<StreamRepository.DownloadOption> = emptyList(),
+        val subjectId: String = "",
+        val detailPath: String = "",
+        val seasonIdx: Int = 0,
+        val episodeIdx: Int = 0
     ) : StreamUiState()
     data class Error(val message: String) : StreamUiState()
 }
@@ -123,7 +128,12 @@ class DetailViewModel : ViewModel() {
                         _streamState.value = StreamUiState.Ready(
                             videoUrl = result.videoUrl,
                             title = title,
-                            subtitles = result.captions
+                            subtitles = result.captions,
+                            downloads = result.downloads,
+                            subjectId = subjectId,
+                            detailPath = detailPath,
+                            seasonIdx = seasonIdx,
+                            episodeIdx = episodeIdx
                         )
                         return@launch
                     }
