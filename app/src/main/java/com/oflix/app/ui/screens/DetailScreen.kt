@@ -403,7 +403,12 @@ fun EpisodeRow(
     }
 
     // Divider
-    HorizontalDivider(color = Color(0xFF1A1A1A), thickness = 1.dp)
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(1.dp)
+            .background(Color(0xFF1A1A1A))
+    )
 }
 
 @Composable
