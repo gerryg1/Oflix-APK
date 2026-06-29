@@ -34,6 +34,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -404,7 +405,7 @@ class PlayerActivity : ComponentActivity() {
                                         imageVector = Icons.Default.Refresh,
                                         contentDescription = "Rewind 10s",
                                         tint = Color.White,
-                                        modifier = Modifier.size(48.dp).androidx.compose.ui.graphics.graphicsLayer(scaleX = -1f)
+                                        modifier = Modifier.size(48.dp).graphicsLayer { scaleX = -1f }
                                     )
                                     Text("10", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 2.dp))
                                 }
@@ -480,7 +481,7 @@ class PlayerActivity : ComponentActivity() {
                                 Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
                                     // Buffering indicator (secondary track)
                                     LinearProgressIndicator(
-                                        progress = { bufferProgress },
+                                        progress = bufferProgress,
                                         modifier = Modifier
                                             .fillMaxWidth()
                                             .height(3.dp)
