@@ -18,6 +18,7 @@ import androidx.compose.animation.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
@@ -191,6 +192,7 @@ class PlayerActivity : ComponentActivity() {
             }
 
             var playbackSpeed by remember { mutableFloatStateOf(1f) }
+            var videoScale by remember { mutableFloatStateOf(1f) }
             
             // Menus
             var showSpeedMenu by remember { mutableStateOf(false) }
@@ -231,9 +233,9 @@ class PlayerActivity : ComponentActivity() {
                 }
             }
 
-            // Auto-hide controls after 4 seconds
-            LaunchedEffect(showControls, isLocked) {
-                if (showControls && !isLocked) {
+            // Auto-hide controls after 4 seconds (only when playing)
+            LaunchedEffect(showControls, isLocked, isPlaying) {
+                if (showControls && !isLocked && isPlaying) {
                     delay(4000)
                     showControls = false
                 }
@@ -331,7 +333,7 @@ class PlayerActivity : ComponentActivity() {
                 showEpisodesMenu = false
                 currentSeasonIdx = sIdx
                 currentEpisodeIdx = eIdx
-                videoTitle = episode.title
+                videoTitle = if (episode.title.contains(initialVideoTitle, ignoreCase = true)) episode.title else "$initialVideoTitle - ${episode.title}"
                 
                 coroutineScope.launch {
                     val se = (sIdx + 1).toString()
@@ -405,6 +407,7 @@ class PlayerActivity : ComponentActivity() {
                     },
                     modifier = Modifier
                         .fillMaxSize()
+                        .graphicsLayer(scaleX = videoScale, scaleY = videoScale)
                         .pointerInput(isLocked) {
                             detectTapGestures(
                                 onTap = { 
@@ -417,8 +420,18 @@ class PlayerActivity : ComponentActivity() {
                                         if (offset.x < w / 3) player.seekTo(player.currentPosition - 10_000)
                                         else if (offset.x > w * 2 / 3) player.seekTo(player.currentPosition + 10_000)
                                     }
+                                },
+                                onLongPress = {
+                                    if (!isLocked) showControls = false
                                 }
                             )
+                        }
+                        .pointerInput(isLocked) {
+                            if (!isLocked) {
+                                detectTransformGestures { _, _, zoom, _ ->
+                                    videoScale = (videoScale * zoom).coerceIn(1f, 3f)
+                                }
+                            }
                         }
                 )
 
@@ -449,9 +462,9 @@ class PlayerActivity : ComponentActivity() {
                     )
                 }
 
-                // Lock Icon Button (always visible when locked, visible when showControls if unlocked)
+                // Lock Icon Button (visible when showControls)
                 AnimatedVisibility(
-                    visible = showControls || isLocked,
+                    visible = showControls,
                     enter = fadeIn(),
                     exit = fadeOut(),
                     modifier = Modifier.align(Alignment.CenterEnd).padding(end = 32.dp)
@@ -469,9 +482,9 @@ class PlayerActivity : ComponentActivity() {
                     }
                 }
 
-                // Brightness Overlay (when dragged)
+                // Brightness Overlay (visible when controls are shown or when dragged)
                 AnimatedVisibility(
-                    visible = showBrightnessOverlay && !isLocked,
+                    visible = (showControls || showBrightnessOverlay) && !isLocked,
                     enter = fadeIn(),
                     exit = fadeOut(),
                     modifier = Modifier.align(Alignment.CenterStart).padding(start = 32.dp)
@@ -635,8 +648,8 @@ class PlayerActivity : ComponentActivity() {
                                             .fillMaxWidth()
                                             .height(4.dp)
                                             .clip(RoundedCornerShape(2.dp)),
-                                        color = Color(0x66FFFFFF), 
-                                        trackColor = Color(0x33FFFFFF) 
+                                        color = Color(0x88FFFFFF), // Buffered progress (white)
+                                        trackColor = Color(0x33FFFFFF) // Unbuffered progress (dark grey)
                                     )
                                     
                                     // Primary Slider
@@ -647,8 +660,8 @@ class PlayerActivity : ComponentActivity() {
                                         },
                                         colors = SliderDefaults.colors(
                                             thumbColor = Color(0xFFE50914),
-                                            activeTrackColor = Color(0xFFE50914),
-                                            inactiveTrackColor = Color.Transparent 
+                                            activeTrackColor = Color(0xFFE50914), // Red for played amount
+                                            inactiveTrackColor = Color.Transparent // Show buffering behind
                                         ),
                                         modifier = Modifier.fillMaxWidth()
                                     )

@@ -195,21 +195,21 @@ export default function VideoPlayer({
       if (video) {
         video.pause();
         video.src = '';
-        try { video.load(); } catch {}
+        try { video.load(); } catch { }
       }
       if (hlsRef.current) {
-        try { hlsRef.current.destroy(); } catch {}
+        try { hlsRef.current.destroy(); } catch { }
         hlsRef.current = null;
       }
       // Remove injected subtitle style element
-      try { document.getElementById('oflix-cue-size')?.remove(); } catch {}
+      try { document.getElementById('oflix-cue-size')?.remove(); } catch { }
       // Exit fullscreen if still active
       try {
         if (document.fullscreenElement || document.webkitFullscreenElement) {
           (document.exitFullscreen || document.webkitExitFullscreen)?.call(document);
         }
         screen.orientation?.unlock?.();
-      } catch {}
+      } catch { }
     };
   }, []);
 
@@ -324,7 +324,7 @@ export default function VideoPlayer({
   }
 
   /* ── subtitle ────────────────────────────────────────── */
-  const SUB_SIZES_PORTRAIT  = { small: 14, medium: 24, large: 32 };
+  const SUB_SIZES_PORTRAIT = { small: 14, medium: 24, large: 32 };
   const SUB_SIZES_LANDSCAPE = { small: 10, medium: 16, large: 22 };
 
   useEffect(() => {
@@ -516,9 +516,9 @@ export default function VideoPlayer({
               const el = wrapRef.current;
               if (el?.dataset.rotated === '1') { el.style.cssText = ''; el.dataset.rotated = ''; }
               screen.orientation?.unlock?.();
-            } catch {}
+            } catch { }
             // Remove injected subtitle style
-            try { document.getElementById('oflix-cue-size')?.remove(); } catch {}
+            try { document.getElementById('oflix-cue-size')?.remove(); } catch { }
             onClose();
           }}>
             <i className="fas fa-times" style={{ fontSize: 24 }} />
