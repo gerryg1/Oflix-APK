@@ -28,11 +28,17 @@ jobs:
     - name: Grant Execute Permission for Gradlew
       run: chmod +x gradlew
 
-    - name: Build Debug APK
-      run: ./gradlew assembleDebug
+    - name: Decode Keystore
+      run: |
+        echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > app/release.keystore
 
-    - name: Rename APK for Release
-      run: mv app/build/outputs/apk/debug/app-debug.apk app/build/outputs/apk/debug/Oflix-Debug.apk
+    - name: Build Release APK
+      env:
+        KEYSTORE_PATH: "release.keystore"
+        KEYSTORE_PASSWORD: "${{ secrets.KEYSTORE_PASSWORD }}"
+        KEY_ALIAS: "${{ secrets.KEY_ALIAS }}"
+        KEY_PASSWORD: "${{ secrets.KEY_PASSWORD }}"
+      run: ./gradlew assembleRelease
 
     - name: Create or Update Release
       uses: softprops/action-gh-release@v2
@@ -49,6 +55,6 @@ jobs:
           Unduh file APK langsung di bawah ini tanpa dibungkus ZIP.
         draft: false
         prerelease: false
-        files: app/build/outputs/apk/debug/Oflix-Debug.apk
+        files: app/build/outputs/apk/release/Oflix-v1.1-release.apk
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
