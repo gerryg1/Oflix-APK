@@ -3,6 +3,8 @@ package com.oflix.app.ui.screens
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -249,6 +251,51 @@ fun DetailScreen(
                             }
                             if (detail.duration.isNotEmpty()) {
                                 MetaBadge(text = "⏱ ${detail.duration}")
+                            }
+                        }
+
+                        // ═══════════════════════════════════════════════
+                        //  CAST / ACTORS
+                        // ═══════════════════════════════════════════════
+                        if (detail.cast.isNotEmpty()) {
+                            Text(
+                                text = "Pemeran",
+                                color = Color.White,
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(bottom = 12.dp)
+                            )
+                            LazyRow(
+                                horizontalArrangement = Arrangement.spacedBy(16.dp),
+                                modifier = Modifier.padding(bottom = 24.dp)
+                            ) {
+                                items(detail.cast) { actor ->
+                                    Column(
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                        modifier = Modifier.width(72.dp)
+                                    ) {
+                                        AsyncImage(
+                                            model = if (actor.avatarUrl.isNotEmpty()) actor.avatarUrl else com.oflix.app.R.drawable.unknow_cast,
+                                            contentDescription = actor.name,
+                                            contentScale = ContentScale.Crop,
+                                            modifier = Modifier
+                                                .size(64.dp)
+                                                .clip(CircleShape)
+                                                .background(Color(0xFF1A1A1A))
+                                        )
+                                        Spacer(modifier = Modifier.height(6.dp))
+                                        Text(
+                                            text = actor.name,
+                                            color = Color(0xFFCCCCCC),
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Medium,
+                                            maxLines = 2,
+                                            overflow = TextOverflow.Ellipsis,
+                                            lineHeight = 14.sp,
+                                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                                        )
+                                    }
+                                }
                             }
                         }
 

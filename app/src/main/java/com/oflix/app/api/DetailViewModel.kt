@@ -21,6 +21,12 @@ data class SeasonData(
     val episodes: List<EpisodeData>
 )
 
+data class CastData(
+    val name: String,
+    val avatarUrl: String,
+    val role: String
+)
+
 data class DetailData(
     val subjectId: String,
     val title: String,
@@ -33,6 +39,7 @@ data class DetailData(
     val duration: String,
     val isMovie: Boolean,
     val seasons: List<SeasonData>,
+    val cast: List<CastData>,
     val trailerUrl: String,
     val detailPath: String
 )
@@ -213,6 +220,24 @@ class DetailViewModel : ViewModel() {
             val totalEps = seasons.sumOf { it.episodes.size }
             val isMovie = totalEps == 0 || subjectType == 1
 
+            // Cast / Actors
+            val castList = mutableListOf<CastData>()
+            if (subject?.has("actors") == true && subject.get("actors").isJsonArray) {
+                for (actor in subject.getAsJsonArray("actors")) {
+                    if (!actor.isJsonObject) continue
+                    val actorObj = actor.asJsonObject
+                    val actorName = actorObj.get("name")?.asString ?: ""
+                    var actorAvatar = ""
+                    if (actorObj.has("avatar") && actorObj.get("avatar").isJsonObject) {
+                        actorAvatar = actorObj.getAsJsonObject("avatar")?.get("url")?.asString ?: ""
+                    }
+                    val actorRole = actorObj.get("role")?.asString ?: ""
+                    if (actorName.isNotEmpty()) {
+                        castList.add(CastData(name = actorName, avatarUrl = actorAvatar, role = actorRole))
+                    }
+                }
+            }
+
             return DetailData(
                 subjectId = subjectId,
                 title = title,
@@ -225,6 +250,7 @@ class DetailViewModel : ViewModel() {
                 duration = durationStr,
                 isMovie = isMovie,
                 seasons = if (isMovie) emptyList() else seasons,
+                cast = castList,
                 trailerUrl = trailerUrl,
                 detailPath = detailPath
             )

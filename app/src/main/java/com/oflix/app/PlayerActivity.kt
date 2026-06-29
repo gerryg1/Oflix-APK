@@ -111,7 +111,19 @@ class PlayerActivity : ComponentActivity() {
             var playbackSpeed by remember { mutableFloatStateOf(1f) }
             var showSpeedMenu by remember { mutableStateOf(false) }
             var showSubtitleMenu by remember { mutableStateOf(false) }
-            var selectedSubIdx by remember { mutableIntStateOf(if (subtitleTracks.isNotEmpty()) 0 else -1) }
+
+            // Default to Indonesian if available, else first subtitle, else -1 (off)
+            val defaultSubIdx = remember {
+                if (subtitleTracks.isEmpty()) -1
+                else {
+                    val idIdx = subtitleTracks.indexOfFirst {
+                        it.code.lowercase() in listOf("id", "ind", "indonesia") ||
+                        it.name.lowercase().contains("indonesia")
+                    }
+                    if (idIdx != -1) idIdx else 0
+                }
+            }
+            var selectedSubIdx by remember { mutableIntStateOf(defaultSubIdx) }
 
             // Auto-hide controls after 4 seconds
             LaunchedEffect(showControls) {
@@ -168,7 +180,7 @@ class PlayerActivity : ComponentActivity() {
                                     )
                                     .setLanguage(track.code.ifEmpty { "und" })
                                     .setLabel(track.name.ifEmpty { "Subtitle ${idx + 1}" })
-                                    .setSelectionFlags(if (idx == 0) C.SELECTION_FLAG_DEFAULT else 0)
+                                    .setSelectionFlags(if (idx == defaultSubIdx) C.SELECTION_FLAG_DEFAULT else 0)
                                     .build()
                             }
                             mediaItemBuilder.setSubtitleConfigurations(subtitleConfigs)
@@ -187,6 +199,15 @@ class PlayerActivity : ComponentActivity() {
                                 applyAudioProcessing(audioSessionId)
                             }
                         })
+
+                        // Apply initial track selection for subtitle
+                        if (defaultSubIdx != -1 && subtitleTracks.isNotEmpty()) {
+                            trackSelectionParameters = trackSelectionParameters
+                                .buildUpon()
+                                .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
+                                .setPreferredTextLanguage(subtitleTracks[defaultSubIdx].code.ifEmpty { null })
+                                .build()
+                        }
                     }
             }
 
@@ -230,7 +251,27 @@ class PlayerActivity : ComponentActivity() {
                         PlayerView(ctx).apply {
                             this.player = player
                             useController = false  // We build our own controls
-                            setShowBuffering(PlayerView.SHOW_BUFFERING_WHEN_PLAYING)
+                            setShowBuffering(PlayerView.SHOW_BUFFERING_NEVER) // Using custom spinner
+
+                            // Subtitle styling matching globals.css
+                            subtitleView?.apply {
+                                setFractionalTextSize(androidx.media3.ui.SubtitleView.DEFAULT_TEXT_SIZE_FRACTION * 1.2f)
+                                setStyle(
+                                    androidx.media3.ui.CaptionStyleCompat(
+                                        android.graphics.Color.WHITE,
+                                        android.graphics.Color.TRANSPARENT,
+                                        android.graphics.Color.TRANSPARENT,
+                                        androidx.media3.ui.CaptionStyleCompat.EDGE_TYPE_DROP_SHADOW,
+                                        android.graphics.Color.BLACK,
+                                        try {
+                                            android.graphics.Typeface.createFromAsset(ctx.assets, "fonts/NetflixSans-Bold.otf")
+                                        } catch (e: Exception) {
+                                            null
+                                        }
+                                    )
+                                )
+                                setBottomPaddingFraction(0.15f)
+                            }
                         }
                     },
                     modifier = Modifier.fillMaxSize()
