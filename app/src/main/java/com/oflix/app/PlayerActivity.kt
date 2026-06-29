@@ -395,7 +395,7 @@ class PlayerActivity : ComponentActivity() {
 
                             // Subtitle styling matching globals.css
                             subtitleView?.apply {
-                                setFractionalTextSize(androidx.media3.ui.SubtitleView.DEFAULT_TEXT_SIZE_FRACTION * 1.1f)
+                                setFractionalTextSize(androidx.media3.ui.SubtitleView.DEFAULT_TEXT_SIZE_FRACTION * 0.85f)
                                 setStyle(
                                     androidx.media3.ui.CaptionStyleCompat(
                                         android.graphics.Color.WHITE,
@@ -653,10 +653,11 @@ class PlayerActivity : ComponentActivity() {
                                         progress = bufferProgress,
                                         modifier = Modifier
                                             .fillMaxWidth()
+                                            .padding(horizontal = 8.dp) // Align with Slider internal padding
                                             .height(4.dp)
                                             .clip(RoundedCornerShape(2.dp)),
-                                        color = Color(0x88FFFFFF), // Buffered progress (white)
-                                        trackColor = Color(0x33FFFFFF) // Unbuffered progress (dark grey)
+                                        color = Color(0xCCFFFFFF), // Buffered progress (Bright white)
+                                        trackColor = Color(0x44FFFFFF) // Unbuffered progress (Grey)
                                     )
                                     
                                     // Primary Slider
