@@ -104,10 +104,17 @@ class PlayerActivity : ComponentActivity() {
             // Player state
             var isPlaying by remember { mutableStateOf(true) }
             var currentPosition by remember { mutableLongStateOf(0L) }
+            var bufferedPosition by remember { mutableLongStateOf(0L) }
             var totalDuration by remember { mutableLongStateOf(0L) }
             var showControls by remember { mutableStateOf(true) }
             var buffering by remember { mutableStateOf(true) }
-            var brightness by remember { mutableFloatStateOf(1f) }
+
+            // Default to device brightness
+            var brightness by remember { mutableFloatStateOf(
+                try {
+                    android.provider.Settings.System.getInt(context.contentResolver, android.provider.Settings.System.SCREEN_BRIGHTNESS) / 255f
+                } catch (e: Exception) { 0.5f }
+            ) }
             var playbackSpeed by remember { mutableFloatStateOf(1f) }
             var showSpeedMenu by remember { mutableStateOf(false) }
             var showSubtitleMenu by remember { mutableStateOf(false) }
@@ -138,6 +145,7 @@ class PlayerActivity : ComponentActivity() {
                 while (true) {
                     exoPlayer?.let { p ->
                         currentPosition = p.currentPosition
+                        bufferedPosition = p.bufferedPosition
                         totalDuration = p.duration.coerceAtLeast(0)
                         isPlaying = p.isPlaying
                         buffering = p.playbackState == Player.STATE_BUFFERING
@@ -387,9 +395,17 @@ class PlayerActivity : ComponentActivity() {
                             // Rewind 10s
                             IconButton(
                                 onClick = { player.seekTo(player.currentPosition - 10_000) },
-                                modifier = Modifier.size(48.dp)
+                                modifier = Modifier.size(56.dp)
                             ) {
-                                Text("↺10", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        imageVector = androidx.compose.material.icons.Icons.Default.Refresh,
+                                        contentDescription = "Rewind 10s",
+                                        tint = Color.White,
+                                        modifier = Modifier.size(48.dp).androidx.compose.ui.draw.scale(scaleX = -1f, scaleY = 1f)
+                                    )
+                                    Text("10", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 2.dp))
+                                }
                             }
 
                             // Play/Pause
@@ -399,24 +415,41 @@ class PlayerActivity : ComponentActivity() {
                                     isPlaying = player.isPlaying
                                 },
                                 modifier = Modifier
-                                    .size(64.dp)
+                                    .size(72.dp)
                                     .clip(CircleShape)
                                     .background(Color(0x33FFFFFF))
                             ) {
-                                Text(
-                                    text = if (isPlaying) "❚❚" else "▶",
-                                    color = Color.White,
-                                    fontSize = if (isPlaying) 28.sp else 32.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
+                                if (isPlaying) {
+                                    // Pause icon (two vertical bars)
+                                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                        Box(modifier = Modifier.width(6.dp).height(24.dp).background(Color.White))
+                                        Box(modifier = Modifier.width(6.dp).height(24.dp).background(Color.White))
+                                    }
+                                } else {
+                                    // Play icon
+                                    Icon(
+                                        imageVector = androidx.compose.material.icons.Icons.Default.PlayArrow,
+                                        contentDescription = "Play",
+                                        tint = Color.White,
+                                        modifier = Modifier.size(42.dp)
+                                    )
+                                }
                             }
 
                             // Forward 10s
                             IconButton(
                                 onClick = { player.seekTo(player.currentPosition + 10_000) },
-                                modifier = Modifier.size(48.dp)
+                                modifier = Modifier.size(56.dp)
                             ) {
-                                Text("↻10", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        imageVector = androidx.compose.material.icons.Icons.Default.Refresh,
+                                        contentDescription = "Forward 10s",
+                                        tint = Color.White,
+                                        modifier = Modifier.size(48.dp)
+                                    )
+                                    Text("10", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 2.dp))
+                                }
                             }
                         }
 
@@ -432,7 +465,7 @@ class PlayerActivity : ComponentActivity() {
                                 )
                                 .padding(bottom = 8.dp)
                         ) {
-                            // Progress Slider
+                            // Progress Slider with Buffering Track
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
                                 modifier = Modifier
@@ -440,47 +473,59 @@ class PlayerActivity : ComponentActivity() {
                                     .padding(horizontal = 16.dp)
                             ) {
                                 val progress = if (totalDuration > 0) currentPosition.toFloat() / totalDuration.toFloat() else 0f
+                                val bufferProgress = if (totalDuration > 0) bufferedPosition.toFloat() / totalDuration.toFloat() else 0f
 
-                                Slider(
-                                    value = progress,
-                                    onValueChange = { newVal ->
-                                        player.seekTo((newVal * totalDuration).toLong())
-                                    },
-                                    colors = SliderDefaults.colors(
-                                        thumbColor = Color(0xFFE50914),
-                                        activeTrackColor = Color(0xFFE50914),
-                                        inactiveTrackColor = Color(0x66FFFFFF)
-                                    ),
-                                    modifier = Modifier.weight(1f)
-                                )
+                                Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
+                                    // Buffering indicator (secondary track)
+                                    LinearProgressIndicator(
+                                        progress = { bufferProgress },
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .height(3.dp)
+                                            .clip(RoundedCornerShape(1.5.dp)),
+                                        color = Color(0x99FFFFFF), // Buffered white color
+                                        trackColor = Color(0x33FFFFFF), // Base track color
+                                        gapSize = 0.dp
+                                    )
+                                    
+                                    // Primary Slider
+                                    Slider(
+                                        value = progress,
+                                        onValueChange = { newVal ->
+                                            player.seekTo((newVal * totalDuration).toLong())
+                                        },
+                                        colors = SliderDefaults.colors(
+                                            thumbColor = Color(0xFFE50914),
+                                            activeTrackColor = Color(0xFFE50914),
+                                            inactiveTrackColor = Color.Transparent // Hide so we see the buffering track
+                                        ),
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+                                }
 
-                                Spacer(modifier = Modifier.width(8.dp))
+                                Spacer(modifier = Modifier.width(12.dp))
                                 Text(
                                     text = formatTime(currentPosition) + " / " + formatTime(totalDuration),
                                     color = Color.White,
-                                    fontSize = 11.sp
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Medium
                                 )
                             }
 
-                            // Bottom action bar: Speed | Subtitles | Quality
+                            Spacer(modifier = Modifier.height(4.dp))
+
+                            // Bottom action bar: Speed | Episodes | Subtitles | Quality | Next
                             Row(
                                 horizontalArrangement = Arrangement.SpaceEvenly,
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(horizontal = 8.dp)
+                                    .padding(horizontal = 16.dp, vertical = 8.dp)
                             ) {
-                                // Speed
-                                BottomAction(
-                                    icon = "⚡",
-                                    label = "Speed (${playbackSpeed}x)",
-                                    onClick = { showSpeedMenu = true }
-                                )
-                                // Audio & Subtitles
-                                BottomAction(
-                                    icon = "💬",
-                                    label = "Subtitles",
-                                    onClick = { showSubtitleMenu = true }
-                                )
+                                BottomAction(icon = "⚡", label = "Speed (${playbackSpeed}x)", onClick = { showSpeedMenu = true })
+                                BottomAction(icon = "📑", label = "Episodes", onClick = { /* TODO */ })
+                                BottomAction(icon = "💬", label = "Audio & Subtitles", onClick = { showSubtitleMenu = true })
+                                BottomAction(icon = "⚙", label = "Auto : 1080p", onClick = { /* TODO */ })
+                                BottomAction(icon = "⏭", label = "Next Episode", onClick = { /* TODO */ })
                             }
                         }
                     }
