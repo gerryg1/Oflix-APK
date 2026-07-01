@@ -232,30 +232,57 @@ class DetailViewModel : ViewModel() {
 
             // Cast / Actors
             val castList = mutableListOf<CastData>()
-            val actorsArray = if (subject?.has("actors") == true && subject.get("actors").isJsonArray) {
-                subject.getAsJsonArray("actors")
-            } else if (subject?.has("actorList") == true && subject.get("actorList").isJsonArray) {
-                subject.getAsJsonArray("actorList")
-            } else {
-                null
+            var actorsArray: com.google.gson.JsonArray? = null
+            
+            // Try to find the array in subject
+            if (subject != null) {
+                val arrayKeys = listOf("actors", "actorList", "cast", "casts", "actor")
+                for (key in arrayKeys) {
+                    if (subject.has(key) && subject.get(key).isJsonArray) {
+                        actorsArray = subject.getAsJsonArray(key)
+                        break
+                    }
+                }
+            }
+            
+            // Try to find the array in data directly if not found in subject
+            if (actorsArray == null && data.isJsonObject) {
+                val arrayKeys = listOf("actors", "actorList", "cast", "casts", "actor")
+                for (key in arrayKeys) {
+                    if (data.has(key) && data.get(key).isJsonArray) {
+                        actorsArray = data.getAsJsonArray(key)
+                        break
+                    }
+                }
             }
 
             if (actorsArray != null) {
-                for (actor in actorsArray) {
-                    if (!actor.isJsonObject) continue
-                    val actorObj = actor.asJsonObject
-                    val actorName = actorObj.get("name")?.asString ?: ""
+                for (actorElement in actorsArray) {
+                    if (!actorElement.isJsonObject) continue
+                    val actorObj = actorElement.asJsonObject
                     
+                    // Extract name
+                    val actorName = actorObj.get("name")?.asString 
+                        ?: actorObj.get("actorName")?.asString 
+                        ?: actorObj.get("castName")?.asString 
+                        ?: actorObj.get("title")?.asString
+                        ?: ""
+                    
+                    // Extract avatar
                     var actorAvatar = ""
-                    if (actorObj.has("avatar") && !actorObj.get("avatar").isJsonNull) {
-                        val avatarElement = actorObj.get("avatar")
-                        if (avatarElement.isJsonObject) {
-                            actorAvatar = avatarElement.asJsonObject.get("url")?.asString ?: ""
-                        } else if (avatarElement.isJsonPrimitive) {
-                            actorAvatar = avatarElement.asString
+                    val imgKeys = listOf("avatar", "image", "img", "photo", "url", "picture", "avatarUrl", "profile_path")
+                    for (k in imgKeys) {
+                        if (actorObj.has(k) && !actorObj.get(k).isJsonNull) {
+                            val el = actorObj.get(k)
+                            if (el.isJsonPrimitive) {
+                                actorAvatar = el.asString
+                                if (actorAvatar.isNotEmpty()) break
+                            } else if (el.isJsonObject) {
+                                actorAvatar = el.asJsonObject.get("url")?.asString 
+                                    ?: el.asJsonObject.get("image")?.asString ?: ""
+                                if (actorAvatar.isNotEmpty()) break
+                            }
                         }
-                    } else if (actorObj.has("image") && !actorObj.get("image").isJsonNull) {
-                        actorAvatar = actorObj.get("image").asString
                     }
                     
                     val actorRole = actorObj.get("role")?.asString ?: ""
