@@ -271,7 +271,18 @@ class PlayerActivity : ComponentActivity() {
                 val mediaSourceFactory = DefaultMediaSourceFactory(httpDataSourceFactory)
                 ExoPlayer.Builder(context)
                     .setMediaSourceFactory(mediaSourceFactory)
-                    .build()
+                    .build().also { p ->
+                        // Attach audio listener ONCE at player creation
+                        p.addAnalyticsListener(object : androidx.media3.exoplayer.analytics.AnalyticsListener {
+                            override fun onAudioSessionIdChanged(
+                                eventTime: androidx.media3.exoplayer.analytics.AnalyticsListener.EventTime,
+                                audioSessionId: Int
+                            ) {
+                                releaseAudioEffects()
+                                applyAudioProcessing(audioSessionId)
+                            }
+                        })
+                    }
             }
 
             // Update Media Item when videoUrl changes
@@ -312,14 +323,12 @@ class PlayerActivity : ComponentActivity() {
                         .build()
                 }
 
-                player.addAnalyticsListener(object : androidx.media3.exoplayer.analytics.AnalyticsListener {
-                    override fun onAudioSessionIdChanged(
-                        eventTime: androidx.media3.exoplayer.analytics.AnalyticsListener.EventTime,
-                        audioSessionId: Int
-                    ) {
-                        applyAudioProcessing(audioSessionId)
-                    }
-                })
+                // Fallback: apply audio processing directly if session already available
+                val sessionId = player.audioSessionId
+                if (sessionId != 0 && sessionId != android.media.AudioManager.AUDIO_SESSION_ID_GENERATE) {
+                    releaseAudioEffects()
+                    applyAudioProcessing(sessionId)
+                }
             }
 
             DisposableEffect(Unit) {
@@ -340,7 +349,15 @@ class PlayerActivity : ComponentActivity() {
                 showEpisodesMenu = false
                 currentSeasonIdx = sIdx
                 currentEpisodeIdx = eIdx
-                videoTitle = if (episode.title.contains(initialVideoTitle, ignoreCase = true)) episode.title else "$initialVideoTitle - ${episode.title}"
+                val cleanBaseTitle = initialVideoTitle.replace(Regex("(?i)\\s*(S\\d+|Season\\s*\\d+|-?\\s*E\\d+|-?\\s*Episode\\s*\\d+).*$"), "").trim()
+                val epPrefix = "S${season.season} Eps ${episode.episode}"
+                videoTitle = if (episode.title.contains(cleanBaseTitle, ignoreCase = true)) {
+                    episode.title
+                } else if (episode.title.matches(Regex("(?i)^(Episode\\s*\\d+|\\d+)$"))) {
+                    "$cleanBaseTitle $epPrefix"
+                } else {
+                    "$cleanBaseTitle $epPrefix - ${episode.title}"
+                }
                 
                 coroutineScope.launch {
                     val se = (sIdx + 1).toString()
@@ -899,24 +916,37 @@ class PlayerActivity : ComponentActivity() {
     private fun applyAudioProcessing(sessionId: Int) {
         if (sessionId == 0) return
         try {
+            // Equalizer: match web's BiquadFilter chain
             equalizer = Equalizer(0, sessionId).apply {
                 enabled = true
                 val bands = numberOfBands
                 if (bands >= 5) {
-                    setBandLevel(0, 200)   // +2dB bass warmth
-                    setBandLevel(3, 300)   // +3dB voice clarity
-                    setBandLevel(4, 150)   // +1.5dB air/sparkle
+                    // Band 0: ~60Hz  - Bass boost (matches lowShelf +2dB)
+                    setBandLevel(0, 400)
+                    // Band 1: ~230Hz - Low-mid warmth
+                    setBandLevel(1, 200)
+                    // Band 2: ~910Hz - Mid clarity
+                    setBandLevel(2, 100)
+                    // Band 3: ~3.6kHz - Voice/dialog boost (matches hiMid +3dB @ 3kHz)
+                    setBandLevel(3, 500)
+                    // Band 4: ~14kHz - Air/treble sparkle (matches highShelf +1.5dB @ 8kHz)
+                    setBandLevel(4, 300)
                 }
             }
+            // DynamicsProcessing: compressor (matches web comp threshold=-24, ratio=4)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                val builder = DynamicsProcessing.Config.Builder(
-                    DynamicsProcessing.VARIANT_FAVOR_FREQUENCY_RESOLUTION,
-                    2, true, 0, true, 0, true, 0, true
-                )
-                dynamicsProcessing = DynamicsProcessing(0, sessionId, builder.build()).apply { enabled = true }
+                try {
+                    val builder = DynamicsProcessing.Config.Builder(
+                        DynamicsProcessing.VARIANT_FAVOR_FREQUENCY_RESOLUTION,
+                        2, true, 0, true, 0, true, 0, true
+                    )
+                    dynamicsProcessing = DynamicsProcessing(0, sessionId, builder.build()).apply { enabled = true }
+                } catch (e: Exception) { /* DynamicsProcessing not available on all devices */ }
             }
+            // LoudnessEnhancer: gain boost (matches web gain.gain.value = 1.4)
+            // 2000 mB = +20dB boost for noticeably louder output
             loudnessEnhancer = LoudnessEnhancer(sessionId).apply {
-                setTargetGain(1400)
+                setTargetGain(2000)
                 enabled = true
             }
         } catch (e: Exception) { e.printStackTrace() }
