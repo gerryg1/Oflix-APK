@@ -959,7 +959,6 @@ class PlayerActivity : ComponentActivity() {
                                 fontWeight = FontWeight.Bold
                             )
                         }
-                        }
                     }
                 }
             }
