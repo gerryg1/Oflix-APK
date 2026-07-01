@@ -18,6 +18,7 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.compose.animation.*
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -958,11 +959,14 @@ class PlayerActivity : ComponentActivity() {
                                 fontWeight = FontWeight.Bold
                             )
                         }
+                        }
                     }
                 }
             }
         }
     }
+}
+}
 
     private fun formatTime(ms: Long): String {
         if (ms <= 0) return "0:00"
