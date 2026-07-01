@@ -9,6 +9,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.PlayArrow
@@ -45,6 +46,7 @@ fun DetailScreen(
     val streamState by viewModel.streamState.collectAsState()
 
     var currentSeason by remember { mutableIntStateOf(0) }
+    var activeBatch by remember { mutableIntStateOf(0) }
 
     LaunchedEffect(mediaId) {
         viewModel.loadDetail(mediaId)
@@ -202,36 +204,61 @@ fun DetailScreen(
                             else -> "▶  Tonton Ep. 1"
                         }
 
-                        Button(
-                            onClick = {
-                                if (detail.isMovie) {
-                                    viewModel.loadStream(detail.subjectId, -1, -1, detail.title, detail.detailPath)
-                                } else {
-                                    val season = detail.seasons.getOrNull(currentSeason)
-                                    val ep = season?.episodes?.firstOrNull()
-                                    if (ep != null) {
-                                        val episodeTitle = "${detail.title} · S${season.season} E${ep.episode}"
-                                        viewModel.loadStream(detail.subjectId, currentSeason, 0, episodeTitle, detail.detailPath)
-                                    }
-                                }
-                            },
-                            enabled = !isStreamLoading,
-                            colors = ButtonDefaults.buttonColors(containerColor = PrimaryRed),
-                            shape = RoundedCornerShape(12.dp),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(52.dp)
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
-                            if (isStreamLoading) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(20.dp),
-                                    color = Color.White,
-                                    strokeWidth = 2.dp
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text("Menghubungkan...", fontWeight = FontWeight.Bold, fontSize = 15.sp)
-                            } else {
-                                Text(watchLabel, fontWeight = FontWeight.Bold, fontSize = 16.sp, letterSpacing = 0.5.sp)
+                            Button(
+                                onClick = {
+                                    if (detail.isMovie) {
+                                        viewModel.loadStream(detail.subjectId, -1, -1, detail.title, detail.detailPath)
+                                    } else {
+                                        val season = detail.seasons.getOrNull(currentSeason)
+                                        val ep = season?.episodes?.firstOrNull()
+                                        if (ep != null) {
+                                            val episodeTitle = "${detail.title} · S${season.season} E${ep.episode}"
+                                            viewModel.loadStream(detail.subjectId, currentSeason, 0, episodeTitle, detail.detailPath)
+                                        }
+                                    }
+                                },
+                                enabled = !isStreamLoading,
+                                colors = ButtonDefaults.buttonColors(containerColor = PrimaryRed),
+                                shape = RoundedCornerShape(12.dp),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(52.dp)
+                            ) {
+                                if (isStreamLoading) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(20.dp),
+                                        color = Color.White,
+                                        strokeWidth = 2.dp
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text("Menghubungkan...", fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                                } else {
+                                    Text(watchLabel, fontWeight = FontWeight.Bold, fontSize = 16.sp, letterSpacing = 0.5.sp)
+                                }
+                            }
+
+                            if (detail.trailerUrl.isNotEmpty()) {
+                                Button(
+                                    onClick = {
+                                        context.startActivity(
+                                            PlayerActivity.createIntent(
+                                                context = context,
+                                                videoUrl = detail.trailerUrl,
+                                                title = "Trailer: ${detail.title}"
+                                            )
+                                        )
+                                    },
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0x33FFFFFF)),
+                                    shape = RoundedCornerShape(12.dp),
+                                    modifier = Modifier.size(52.dp),
+                                    contentPadding = PaddingValues(0.dp)
+                                ) {
+                                    Text("🎬", fontSize = 20.sp)
+                                }
                             }
                         }
 
@@ -332,7 +359,9 @@ fun DetailScreen(
                             if (detail.seasons.size > 1) {
                                 Row(
                                     horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                    modifier = Modifier.padding(bottom = 16.dp)
+                                    modifier = Modifier
+                                        .padding(bottom = 16.dp)
+                                        .horizontalScroll(rememberScrollState())
                                 ) {
                                     detail.seasons.forEachIndexed { idx, season ->
                                         val isActive = idx == currentSeason
@@ -346,19 +375,52 @@ fun DetailScreen(
                                                 .background(
                                                     if (isActive) PrimaryRed else Color(0xFF1A1A1A)
                                                 )
-                                                .clickable { currentSeason = idx }
+                                                .clickable { 
+                                                    currentSeason = idx 
+                                                    activeBatch = 0
+                                                }
                                                 .padding(horizontal = 16.dp, vertical = 8.dp)
                                         )
                                     }
                                 }
                             }
 
-                            // Episode Rows — clean list like the screenshot
                             val episodes = detail.seasons.getOrNull(currentSeason)?.episodes ?: emptyList()
                             val seasonNum = detail.seasons.getOrNull(currentSeason)?.season ?: 1
+                            val BATCH_SIZE = 50
 
+                            // Batch Selector
+                            if (episodes.size > BATCH_SIZE) {
+                                val batchCount = Math.ceil(episodes.size.toDouble() / BATCH_SIZE).toInt()
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    modifier = Modifier
+                                        .padding(bottom = 16.dp)
+                                        .horizontalScroll(rememberScrollState())
+                                ) {
+                                    for (i in 0 until batchCount) {
+                                        val start = i * BATCH_SIZE + 1
+                                        val end = kotlin.math.min((i + 1) * BATCH_SIZE, episodes.size)
+                                        val isActive = i == activeBatch
+                                        Text(
+                                            text = "$start - $end",
+                                            color = if (isActive) Color.White else Color(0xFF888888),
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            modifier = Modifier
+                                                .clip(RoundedCornerShape(20.dp))
+                                                .background(if (isActive) Color(0x33FFFFFF) else Color(0xFF1A1A1A))
+                                                .clickable { activeBatch = i }
+                                                .padding(horizontal = 14.dp, vertical = 6.dp)
+                                        )
+                                    }
+                                }
+                            }
+
+                            // Episode Rows — clean list like the screenshot
                             Column {
-                                episodes.forEach { ep ->
+                                val currentBatchEpisodes = episodes.drop(activeBatch * BATCH_SIZE).take(BATCH_SIZE)
+                                currentBatchEpisodes.forEach { ep ->
                                     val epIdx = ep.episode - 1
                                     EpisodeRow(
                                         episodeNumber = ep.episode,

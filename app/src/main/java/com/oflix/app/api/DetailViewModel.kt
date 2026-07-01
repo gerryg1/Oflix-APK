@@ -232,15 +232,32 @@ class DetailViewModel : ViewModel() {
 
             // Cast / Actors
             val castList = mutableListOf<CastData>()
-            if (subject?.has("actors") == true && subject.get("actors").isJsonArray) {
-                for (actor in subject.getAsJsonArray("actors")) {
+            val actorsArray = if (subject?.has("actors") == true && subject.get("actors").isJsonArray) {
+                subject.getAsJsonArray("actors")
+            } else if (subject?.has("actorList") == true && subject.get("actorList").isJsonArray) {
+                subject.getAsJsonArray("actorList")
+            } else {
+                null
+            }
+
+            if (actorsArray != null) {
+                for (actor in actorsArray) {
                     if (!actor.isJsonObject) continue
                     val actorObj = actor.asJsonObject
                     val actorName = actorObj.get("name")?.asString ?: ""
+                    
                     var actorAvatar = ""
-                    if (actorObj.has("avatar") && actorObj.get("avatar").isJsonObject) {
-                        actorAvatar = actorObj.getAsJsonObject("avatar")?.get("url")?.asString ?: ""
+                    if (actorObj.has("avatar") && !actorObj.get("avatar").isJsonNull) {
+                        val avatarElement = actorObj.get("avatar")
+                        if (avatarElement.isJsonObject) {
+                            actorAvatar = avatarElement.asJsonObject.get("url")?.asString ?: ""
+                        } else if (avatarElement.isJsonPrimitive) {
+                            actorAvatar = avatarElement.asString
+                        }
+                    } else if (actorObj.has("image") && !actorObj.get("image").isJsonNull) {
+                        actorAvatar = actorObj.get("image").asString
                     }
+                    
                     val actorRole = actorObj.get("role")?.asString ?: ""
                     if (actorName.isNotEmpty()) {
                         castList.add(CastData(name = actorName, avatarUrl = actorAvatar, role = actorRole))
