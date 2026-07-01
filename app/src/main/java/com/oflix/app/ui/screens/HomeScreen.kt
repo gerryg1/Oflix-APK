@@ -48,6 +48,7 @@ fun HomeScreen(
     currentCategory: String,
     onCategorySelected: (String) -> Unit,
     onNavigateToDetail: (String) -> Unit,
+    onNavigateToRanking: (String, String) -> Unit,
     viewModel: HomeViewModel = viewModel()
 ) {
     val scrollState = rememberScrollState()
@@ -55,10 +56,19 @@ fun HomeScreen(
     val uiState by viewModel.uiState.collectAsState()
 
     val handleCategoryClick: (String) -> Unit = { category ->
-        if (category == "donghua" || category == "komik") {
-            Toast.makeText(context, "Kategori ini Segera Hadir!", Toast.LENGTH_SHORT).show()
-        } else {
-            onCategorySelected(category)
+        when (category) {
+            "donghua", "komik" -> {
+                Toast.makeText(context, "Kategori ini Segera Hadir!", Toast.LENGTH_SHORT).show()
+            }
+            "film" -> {
+                onNavigateToRanking("8821254238245470240", "Film")
+            }
+            "series" -> {
+                onNavigateToRanking("4809349160627587984", "Series")
+            }
+            else -> {
+                onCategorySelected(category)
+            }
         }
     }
 
@@ -126,49 +136,56 @@ fun HomeScreen(
                             HorizontalSection(
                                 title = "Trending Now 🔥",
                                 items = state.trending,
-                                onItemClick = { onNavigateToDetail(it.id) }
+                                onItemClick = { onNavigateToDetail(it.id) },
+                                onSeeMoreClick = { onNavigateToRanking("872031290915189720", "Trending Now") }
                             )
                             HorizontalSection(
                                 title = "Indonesian Movies",
                                 items = state.indonesianMovies,
-                                onItemClick = { onNavigateToDetail(it.id) }
+                                onItemClick = { onNavigateToDetail(it.id) },
+                                onSeeMoreClick = { onNavigateToRanking("6528093688173053896", "Indonesian Movies") }
                             )
                             HorizontalSection(
                                 title = "Indonesian Drama",
                                 items = state.indonesianDrama,
-                                onItemClick = { onNavigateToDetail(it.id) }
+                                onItemClick = { onNavigateToDetail(it.id) },
+                                onSeeMoreClick = { onNavigateToRanking("5283462032510044280", "Indonesian Drama") }
                             )
                             HorizontalSection(
                                 title = "K-Drama Populer",
                                 items = state.kdrama,
-                                onItemClick = { onNavigateToDetail(it.id) }
+                                onItemClick = { onNavigateToDetail(it.id) },
+                                onSeeMoreClick = { onNavigateToRanking("4380734070238626200", "K-Drama Populer") }
                             )
                             HorizontalSection(
                                 title = "Anime (Donghua)",
                                 items = state.anime,
                                 onItemClick = { onNavigateToDetail(it.id) },
-                                onSeeMoreClick = { handleCategoryClick("donghua") }
+                                onSeeMoreClick = { onNavigateToRanking("8617025562613270856", "Anime") }
                             )
                             HorizontalSection(
                                 title = "Western TV",
                                 items = state.westernTv,
                                 onItemClick = { onNavigateToDetail(it.id) },
-                                onSeeMoreClick = { handleCategoryClick("series") }
+                                onSeeMoreClick = { onNavigateToRanking("1469286917119311888", "Western TV") }
                             )
                             HorizontalSection(
                                 title = "Short TV",
                                 items = state.shortTv,
-                                onItemClick = { onNavigateToDetail(it.id) }
+                                onItemClick = { onNavigateToDetail(it.id) },
+                                onSeeMoreClick = { onNavigateToRanking("8624142774394406504", "Short TV") }
                             )
                             HorizontalSection(
                                 title = "Horror Pilihan",
                                 items = state.horror,
-                                onItemClick = { onNavigateToDetail(it.id) }
+                                onItemClick = { onNavigateToDetail(it.id) },
+                                onSeeMoreClick = { onNavigateToRanking("5848753831881965888", "Horror Pilihan") }
                             )
                             HorizontalSection(
                                 title = "Thailand Drama",
                                 items = state.thailandDrama,
-                                onItemClick = { onNavigateToDetail(it.id) }
+                                onItemClick = { onNavigateToDetail(it.id) },
+                                onSeeMoreClick = { onNavigateToRanking("1164329479448281992", "Thailand Drama") }
                             )
                             // Komik section - Coming Soon
                             // HorizontalSection for Komik is intentionally omitted as it's still in development

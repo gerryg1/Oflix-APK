@@ -16,6 +16,7 @@ import androidx.navigation.compose.rememberNavController
 import com.oflix.app.ui.components.BottomNav
 import com.oflix.app.ui.screens.DetailScreen
 import com.oflix.app.ui.screens.HomeScreen
+import com.oflix.app.ui.screens.RankingScreen
 import com.oflix.app.ui.theme.BackgroundDark
 import com.oflix.app.ui.theme.OflixTheme
 
@@ -75,7 +76,10 @@ fun OflixApp() {
                             currentCategory = category
                         },
                         onNavigateToDetail = { mediaId ->
-                            navController.navigate("detail/$mediaId")
+                            navController.navigate("detail/${java.net.URLEncoder.encode(mediaId, "UTF-8")}")
+                        },
+                        onNavigateToRanking = { rankingId, title ->
+                            navController.navigate("ranking/$rankingId?title=${java.net.URLEncoder.encode(title, "UTF-8")}")
                         }
                     )
                 }
@@ -93,6 +97,19 @@ fun OflixApp() {
                     DetailScreen(
                         mediaId = mediaId,
                         onNavigateBack = { navController.popBackStack() }
+                    )
+                }
+
+                composable("ranking/{rankingId}?title={title}") { backStackEntry ->
+                    val rankingId = backStackEntry.arguments?.getString("rankingId") ?: ""
+                    val title = backStackEntry.arguments?.getString("title") ?: "Peringkat"
+                    RankingScreen(
+                        rankingId = rankingId,
+                        rankingTitle = title,
+                        onNavigateBack = { navController.popBackStack() },
+                        onNavigateToDetail = { mediaId ->
+                            navController.navigate("detail/${java.net.URLEncoder.encode(mediaId, "UTF-8")}")
+                        }
                     )
                 }
             }
