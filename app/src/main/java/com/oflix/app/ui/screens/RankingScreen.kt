@@ -18,7 +18,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.oflix.app.api.RankingUiState
 import com.oflix.app.api.RankingViewModel
-import com.oflix.app.ui.components.MediaCard
+import com.oflix.app.ui.components.MovieCard
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
 
@@ -107,9 +107,9 @@ fun RankingScreen(
                         modifier = Modifier.fillMaxSize()
                     ) {
                         items(state.items) { item ->
-                            MediaCard(
-                                item = item,
-                                onClick = { onNavigateToDetail(item.detailPath) }
+                            MovieCard(
+                                movie = item,
+                                onClick = { onNavigateToDetail(item.id) }
                             )
                         }
                         
