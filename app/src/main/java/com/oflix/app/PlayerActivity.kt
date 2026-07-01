@@ -964,8 +964,6 @@ class PlayerActivity : ComponentActivity() {
             }
         }
     }
-}
-}
 
     private fun formatTime(ms: Long): String {
         if (ms <= 0) return "0:00"
