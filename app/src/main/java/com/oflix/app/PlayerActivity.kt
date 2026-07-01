@@ -79,6 +79,7 @@ class PlayerActivity : ComponentActivity() {
     private var loudnessEnhancer: LoudnessEnhancer? = null
 
     companion object {
+        var hasShownZoomCoachMark = false
         private const val EXTRA_VIDEO_URL = "video_url"
         private const val EXTRA_VIDEO_TITLE = "video_title"
         private const val EXTRA_SUBTITLES = "subtitles"
@@ -200,6 +201,7 @@ class PlayerActivity : ComponentActivity() {
 
             var playbackSpeed by remember { mutableFloatStateOf(1f) }
             var videoScale by remember { mutableFloatStateOf(1f) }
+            var showCoachMark by remember { mutableStateOf(!hasShownZoomCoachMark) }
             
             // Menus
             var showSpeedMenu by remember { mutableStateOf(false) }
@@ -245,6 +247,15 @@ class PlayerActivity : ComponentActivity() {
                 if (showControls && !isLocked && isPlaying) {
                     delay(4000)
                     showControls = false
+                }
+            }
+
+            // Auto-hide coach mark after 5 seconds of playing
+            LaunchedEffect(showCoachMark, isPlaying) {
+                if (showCoachMark && isPlaying) {
+                    delay(5000)
+                    showCoachMark = false
+                    hasShownZoomCoachMark = true
                 }
             }
 
@@ -895,7 +906,57 @@ class PlayerActivity : ComponentActivity() {
                                         }
                                     }
                                 }
+                        }
+                    }
+                }
+
+                // ── Coach Mark (Instructional Overlay) ──
+                if (showCoachMark) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(Color(0xCC000000))
+                            .clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null
+                            ) {
+                                showCoachMark = false
+                                hasShownZoomCoachMark = true
+                            },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            val infiniteTransition = rememberInfiniteTransition()
+                            val pinchDistance by infiniteTransition.animateFloat(
+                                initialValue = 0f,
+                                targetValue = 50f,
+                                animationSpec = infiniteRepeatable(
+                                    animation = tween(1500, easing = LinearEasing),
+                                    repeatMode = RepeatMode.Restart
+                                )
+                            )
+                            val alphaAnim by infiniteTransition.animateFloat(
+                                initialValue = 1f,
+                                targetValue = 0f,
+                                animationSpec = infiniteRepeatable(
+                                    animation = tween(1500, easing = LinearEasing),
+                                    repeatMode = RepeatMode.Restart
+                                )
+                            )
+                            
+                            Box(modifier = Modifier.size(150.dp), contentAlignment = Alignment.Center) {
+                                // Finger 1 (Top Left moving out)
+                                Box(modifier = Modifier.offset(x = (-pinchDistance).dp, y = (-pinchDistance).dp).size(40.dp).clip(CircleShape).background(Color.White.copy(alpha = alphaAnim)))
+                                // Finger 2 (Bottom Right moving out)
+                                Box(modifier = Modifier.offset(x = pinchDistance.dp, y = pinchDistance.dp).size(40.dp).clip(CircleShape).background(Color.White.copy(alpha = alphaAnim)))
                             }
+                            Spacer(modifier = Modifier.height(24.dp))
+                            Text(
+                                text = "Cubit layar untuk memperbesar video",
+                                color = Color.White,
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.Bold
+                            )
                         }
                     }
                 }
