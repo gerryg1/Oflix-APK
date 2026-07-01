@@ -910,6 +910,7 @@ class PlayerActivity : ComponentActivity() {
                         }
                     }
                 }
+                }
 
                 // ── Coach Mark (Instructional Overlay) ──
                 if (showCoachMark) {
